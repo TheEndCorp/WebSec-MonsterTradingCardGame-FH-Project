@@ -1,5 +1,12 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <ClassDiagram MajorVersion="1" MinorVersion="1">
+  <Class Name="User" Collapsed="true">
+    <Position X="9.75" Y="1.5" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAQCIAAAAAAAAACAAABAAAQAAAAAAAACAAAAAgAAAAA=</HashCode>
+      <FileName>User.cs</FileName>
+    </TypeIdentifier>
+  </Class>
   <Class Name="CardTypes" Collapsed="true">
     <Position X="7.25" Y="3.5" Width="1.5" />
     <TypeIdentifier>
@@ -82,13 +89,6 @@
     <TypeIdentifier>
       <HashCode>IBAAEBAAAAIAAABCQAAAQQAAACEAAAAAAABAAAAAIAA=</HashCode>
       <FileName>SeviceRequest.cs</FileName>
-    </TypeIdentifier>
-  </Class>
-  <Class Name="User" Collapsed="true">
-    <Position X="9.75" Y="1.5" Width="1.5" />
-    <TypeIdentifier>
-      <HashCode>AAQCIAAAAAAAAACAAABAAAQAAAAAAAACAAAAAgAAAAA=</HashCode>
-      <FileName>User.cs</FileName>
     </TypeIdentifier>
   </Class>
   <Font Name="Segoe UI" Size="9" />

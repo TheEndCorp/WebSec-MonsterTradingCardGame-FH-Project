@@ -102,19 +102,6 @@ public class UserServiceHandler
     }
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
     private void SendResponse(HttpListenerResponse response, string content, string contentType)
 {
     byte[] buffer = System.Text.Encoding.UTF8.GetBytes(content);
