@@ -92,6 +92,7 @@ namespace SemesterProjekt1
 
         public User OpenCardPack(int userId, string username, string password)
         {
+            Console.WriteLine("Test");
             var user = _users.Find(p => p.Id == userId && p.Name == username && p.Password == password);
             if (user != null && AuthenticateUser(username, password) != null)
             {

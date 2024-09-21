@@ -26,16 +26,6 @@ namespace SemesterProjekt1
         }
 
         [JsonConstructor]
-        public Inventory(List<Card> ownedCards, Deck deck, List<CardPack> cardPacks, int money, int userID)
-        {
-            this.OwnedCards = ownedCards ?? new List<Card>();
-            this.Deck = deck ?? new Deck();
-            this.CardPacks = cardPacks ?? new List<CardPack>();
-            this.Money = OwnedCards.Count == 0 ? 20 : money;
-            this.UserID = userID;
-        }
-
-        [JsonConstructor]
         public Inventory(List<Card> ownedCards, Deck deck, List<CardPack> cardPacks, int money, int userID, int ELO)
         {
             this.OwnedCards = ownedCards ?? new List<Card>();
@@ -66,21 +56,11 @@ namespace SemesterProjekt1
 
         public void AddCardPack(CardPack cardPack, int amount)
         {
-            if (amount <= 0)
+            if (amount <= 0) return;
+
+            while (amount > 0 && Money >= 5 * amount)
             {
-                return;
-            }
-            else if (amount > 1)
-            {
-                for (int i = 0; i < amount; i++)
-                {
-                    CardPacks.Add(cardPack);
-                    Money -= 5;
-                }
-            }
-            while (amount >= 1 && Money >= 5)
-            {
-                CardPacks.Add(cardPack);
+                CardPacks.Add(new CardPack(UserID)); // Create a new instance for each pack
                 Money -= 5;
                 amount--;
             }

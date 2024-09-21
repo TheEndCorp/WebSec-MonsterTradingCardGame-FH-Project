@@ -1,0 +1,81 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Text.Json.Serialization;
+
+
+namespace SemesterProjekt1
+{
+    public class CardPack : CardTypes
+    {
+        private static readonly ThreadLocal<Random> _random = new ThreadLocal<Random>(() => new Random(Guid.NewGuid().GetHashCode()));
+
+        public new Rarity Rarity { get; set; } 
+        public int UserID { get; set; }
+        public int Price { get; }
+
+        public CardPack(int userID)
+        {
+            UserID = userID;
+            Rarity = GenerateRandomRarity();
+            Price = 5;
+        }
+
+        [JsonConstructor]
+        public CardPack(int userID, Rarity rarity)
+        {
+            UserID = userID;
+            Rarity = rarity;
+            Price = 5;
+        }
+
+        private Rarity GenerateRandomRarity()
+        {
+            var rarities = Enum.GetValues(typeof(Rarity));
+            var randomIndex = _random?.Value?.Next(rarities.Length) ?? 0;
+            return (Rarity)(rarities.GetValue(randomIndex) ?? Rarity.Common);
+        }
+
+        public List<Card> OpenCardPack(int userId)
+        {
+            var cards = GenerateCards(5 * ((int)Rarity / 2), userId);
+            return cards;
+        }
+
+        private List<Card> GenerateCards(int numberOfCards, int userId)
+        {
+            var cards = new List<Card>();
+            for (int i = 0; i < numberOfCards; i++)
+            {
+                cards.Add(GenerateRandomCard(userId));
+            }
+            return cards;
+        }
+
+        private Card GenerateRandomCard(int userID)
+        {
+            var element = (ElementType)(_random?.Value?.Next(0, Enum.GetValues(typeof(ElementType)).Length) ?? 0);
+            var type = (CardType)(_random?.Value?.Next(0, Enum.GetValues(typeof(CardType)).Length) ?? 0);
+            var rarity = (Rarity)(_random?.Value?.Next(1, Enum.GetValues(typeof(Rarity)).Length) ?? 1);
+            int damage = _random?.Value?.Next(1, 10) ?? 1;
+
+            if (type == CardType.Monster)
+            {
+                string name = MonsterNames[_random?.Value?.Next(0, MonsterNames.Length) ?? 0];
+                if (name == "FireElf")
+                {
+                    element = ElementType.Fire;
+                }
+
+                return new MonsterCard(name, damage, element, rarity, false, userID);
+            }
+            else
+            {
+                string name = SpellNames[_random?.Value?.Next(0, SpellNames.Length) ?? 0];
+                return new SpellCard(name, damage, element, rarity, false, userID);
+            }
+        }
+    }
+
+
+
+}

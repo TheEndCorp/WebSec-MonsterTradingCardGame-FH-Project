@@ -36,4 +36,37 @@ namespace SemesterProjekt1
 
 
     }
+
+
+    public enum ElementType
+    {
+        Water,
+        Fire,
+        Normal
+    }
+
+    public enum CardType
+    {
+        Monster,
+        Spell
+    }
+
+    public enum Rarity
+    {
+        Common = 1,
+        Rare = 2,
+        Epic = 3,
+        Legendary = 4,
+        God = 5
+    }
 }
+
+
+
+
+
+
+
+
+
+

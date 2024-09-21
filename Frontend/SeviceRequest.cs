@@ -134,7 +134,9 @@ namespace SemesterProjekt1
                     if (inventory != null)
                     {
                         string inventoryHtml = GenerateInventoryHtml(inventory);
-                        response.SetCookie(new Cookie("userData", $"username={username},password={password},userid={user.Id}"));
+                        response.SetCookie(new Cookie("userData", $"username={username}&password={password}&userid={user.Id}"));
+
+
                         SendResponse(response, inventoryHtml, "text/html");
                     }
                     else
@@ -177,6 +179,7 @@ namespace SemesterProjekt1
                 if (userDataCookie != null)
                 {
                     var userData = System.Web.HttpUtility.ParseQueryString(userDataCookie);
+                    Console.WriteLine("Userdata: " + userData);
                     string username = userData["username"];
                     string password = userData["password"];
                     string userIdString = userData["userid"];
@@ -185,6 +188,7 @@ namespace SemesterProjekt1
                     var user = _userServiceHandler.AuthenticateUser(username, password);
                     if (user != null)
                     {
+                        user.Inventory.OpenCardPack(user.Inventory.CardPacks[0]);
                         string jsonResponse = SerializeToJson(user.Inventory.OwnedCards);
                         SendResponse(response, jsonResponse, "application/json");
                     }
@@ -215,12 +219,14 @@ namespace SemesterProjekt1
                 if (userDataCookie != null)
                 {
                     var userData = System.Web.HttpUtility.ParseQueryString(userDataCookie);
+
+                    Console.WriteLine("Userdata: " + userData);
+
                     string username = userData["username"];
                     string password = userData["password"];
                     string userIdString = userData["userid"];
                     int userid = int.Parse(userIdString);
-                    Console.WriteLine("userIdString: " + userIdString);
-                    Console.WriteLine("userid: " + userid);
+
 
 
                     var user = _userServiceHandler.AuthenticateUser(username, password);
