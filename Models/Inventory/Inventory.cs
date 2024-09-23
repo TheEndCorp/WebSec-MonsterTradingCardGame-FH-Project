@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json.Serialization;
+using static Microsoft.ApplicationInsights.MetricDimensionNames.TelemetryContext;
 
 
 namespace SemesterProjekt1
@@ -31,7 +32,7 @@ namespace SemesterProjekt1
             this.OwnedCards = ownedCards ?? new List<Card>();
             this.Deck = deck ?? new Deck();
             this.CardPacks = cardPacks ?? new List<CardPack>();
-            this.Money = OwnedCards.Count == 0 ? 20 : money;
+            this.Money = (OwnedCards.Count == 0 && CardPacks.Count == 0) ? 20 : money;
             this.UserID = userID;
             this.ELO = ELO;
         }

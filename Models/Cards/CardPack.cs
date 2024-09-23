@@ -66,12 +66,12 @@ namespace SemesterProjekt1
                     element = ElementType.Fire;
                 }
 
-                return new MonsterCard(name, damage, element, rarity, false, userID);
+                return new MonsterCard(name, damage, element, rarity, userID);
             }
             else
             {
                 string name = SpellNames[_random?.Value?.Next(0, SpellNames.Length) ?? 0];
-                return new SpellCard(name, damage, element, rarity, false, userID);
+                return new SpellCard(name, damage, element, rarity, userID);
             }
         }
     }

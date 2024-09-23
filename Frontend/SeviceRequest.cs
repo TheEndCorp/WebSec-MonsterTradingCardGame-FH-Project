@@ -1,6 +1,7 @@
 ﻿using System;
 using System.IO;
 using System.Net;
+using System.Runtime.InteropServices;
 using System.Text.Json;
 using static Microsoft.ApplicationInsights.MetricDimensionNames.TelemetryContext;
 
@@ -188,9 +189,30 @@ namespace SemesterProjekt1
                     var user = _userServiceHandler.AuthenticateUser(username, password);
                     if (user != null)
                     {
-                        user.Inventory.OpenCardPack(user.Inventory.CardPacks[0]);
+                        for (int i = 0; i < user.Inventory.CardPacks.Count; i++)
+                        {
+                            Console.WriteLine("CardPack at index " + i + ": " + user.Inventory.CardPacks[i]);
+                            Console.WriteLine("Here: "+ user.Inventory.CardPacks[i].Rarity);
+                            Console.WriteLine("Cards in CardPack:");
+
+                        }
+                        for (int i = 0; i < user.Inventory.CardPacks.Count; i++)
+                        {
+                            user.Inventory.OpenCardPack(user.Inventory.CardPacks[i]);
+                            user.Inventory.CardPacks.RemoveAt(i);
+                        }
+                            user.Inventory.CardPacks.RemoveAt(0);
+
+
+
+
+
                         string jsonResponse = SerializeToJson(user.Inventory.OwnedCards);
                         SendResponse(response, jsonResponse, "application/json");
+
+ 
+
+
                     }
                     else
                     {
