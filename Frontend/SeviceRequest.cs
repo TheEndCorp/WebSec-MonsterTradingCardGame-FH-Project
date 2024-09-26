@@ -79,6 +79,15 @@ namespace SemesterProjekt1
                 {
                     await HandleBuyPacksAsync(request, response);
                 }
+                else if (request.HttpMethod == "GET" && request.Url.AbsolutePath == "/lobby")
+                {
+                    SendLobbyPage(request, response);
+                }
+                else if (request.HttpMethod == "POST" && request.Url.AbsolutePath == "/join-lobby")
+                {
+                    await HandleJoinLobbyAsync(request, response);
+                }
+
                 else
                 {
                     response.StatusCode = (int)HttpStatusCode.NotFound;
@@ -91,8 +100,6 @@ namespace SemesterProjekt1
                 string errorMessage = $"Error: {ex.Message}\n{ex.StackTrace}";
                 SendResponse(response, errorMessage, "text/plain");
             }
-
-            DisplayThreadPoolInfo();
         }
 
         private async Task HandleAddUserAsync(HttpListenerRequest request, HttpListenerResponse response)
@@ -103,9 +110,18 @@ namespace SemesterProjekt1
                 var user = DeserializeUser(requestBody);
                 if (user != null)
                 {
-                    _userServiceHandler.AddUser(user);
-                    response.StatusCode = (int)HttpStatusCode.Created;
-                    SendResponse(response, SerializeToJson(new { message = "User created successfully" }), "application/json");
+                    var existingUser = _userServiceHandler.AuthenticateUser(user.Name, user.Password);
+                    if (existingUser == null)
+                    {
+                        _userServiceHandler.AddUser(user);
+                        response.StatusCode = (int)HttpStatusCode.Created;
+                        SendResponse(response, SerializeToJson(new { message = "User created successfully" }), "application/json");
+                    }
+                    else
+                    {
+                        response.StatusCode = (int)HttpStatusCode.Conflict;
+                        SendResponse(response, SerializeToJson(new { error = "User already exists" }), "application/json");
+                    }
                 }
                 else
                 {
@@ -131,7 +147,11 @@ namespace SemesterProjekt1
                     var inventory = user.Inventory;
                     if (inventory != null)
                     {
+                        string token = $"{user.Name}-mtcgToken";
                         string inventoryHtml = GenerateInventoryHtml(inventory);
+
+                        // Setzen des Cookies
+                        response.SetCookie(new Cookie("authToken", token));
                         response.SetCookie(new Cookie("userData", $"username={username}&password={password}&userid={user.Id}"));
 
                         SendResponse(response, inventoryHtml, "text/html");
@@ -272,6 +292,56 @@ namespace SemesterProjekt1
             response.OutputStream.Close();
         }
 
+
+
+        private async Task HandleJoinLobbyAsync(HttpListenerRequest request, HttpListenerResponse response)
+        {
+            using (var reader = new StreamReader(request.InputStream, request.ContentEncoding))
+            {
+                string requestBody = await reader.ReadToEndAsync();
+                var formData = System.Web.HttpUtility.ParseQueryString(requestBody);
+
+                var userDataCookie = request.Cookies["userData"]?.Value;
+                if (userDataCookie != null)
+                {
+                    var userData = System.Web.HttpUtility.ParseQueryString(userDataCookie);
+                    string username = userData["username"];
+                    string password = userData["password"];
+                    string userIdString = userData["userid"];
+                    int userId = int.Parse(userIdString);
+                    
+
+                    var user = _userServiceHandler.AuthenticateUser(username, password);
+                    if (user != null)
+                    {
+                        
+                        _userServiceHandler.AddUserToLobby(user);
+                        
+                        
+                        SendResponse(response, "User added to lobby", "text/plain");
+                    }
+                    else
+                    {
+                        response.StatusCode = (int)HttpStatusCode.Unauthorized;
+                        SendResponse(response, "Invalid username or password.", "text/plain");
+                    }
+                }
+                else
+                {
+                    response.StatusCode = (int)HttpStatusCode.BadRequest;
+                    SendResponse(response, "Invalid user ID.", "text/plain");
+                }
+            }
+
+            response.OutputStream.Close();
+        }
+
+
+        // In der Datei ServiceRequest.cs
+
+
+
+
         private void SendLoginPage(HttpListenerResponse response)
         {
             string loginForm = @"
@@ -378,19 +448,50 @@ namespace SemesterProjekt1
             </html>";
             return html;
         }
-
-        private void DisplayThreadPoolInfo()
+        private void SendLobbyPage(HttpListenerRequest request, HttpListenerResponse response)
         {
-            ThreadPool.GetAvailableThreads(out int workerThreads, out int completionPortThreads);
-            ThreadPool.GetMaxThreads(out int maxWorkerThreads, out int maxCompletionPortThreads);
-            ThreadPool.GetMinThreads(out int minWorkerThreads, out int minCompletionPortThreads);
+            var userDataCookie = request.Cookies["userData"]?.Value;
+            if (userDataCookie != null)
+            {
+                var userData = System.Web.HttpUtility.ParseQueryString(userDataCookie);
+                string username = userData["username"];
+                string password = userData["password"];
+                string userIdString = userData["userid"];
+                int userId = int.Parse(userIdString);
 
-            Console.WriteLine($"Verfügbare Worker-Threads: {workerThreads}");
-            Console.WriteLine($"Verfügbare IO-Completion-Threads: {completionPortThreads}");
-            Console.WriteLine($"Maximale Worker-Threads: {maxWorkerThreads}");
-            Console.WriteLine($"Maximale IO-Completion-Threads: {maxCompletionPortThreads}");
-            Console.WriteLine($"Minimale Worker-Threads: {minWorkerThreads}");
-            Console.WriteLine($"Minimale IO-Completion-Threads: {minCompletionPortThreads}");
+                var user = _userServiceHandler.AuthenticateUser(username, password);
+                if (user != null)
+                {
+                    string lobbyPage = $@"
+                    <!DOCTYPE html>
+                    <html lang='de'>
+                    <head>
+                        <meta charset='UTF-8'>
+                        <title>Lobby</title>
+                    </head>
+                    <body>
+                        <h1>Lobby</h1>
+                        <p>ID: {user.Inventory.UserID}</p>
+                        <form id='joinLobbyForm' method='post' action='/join-lobby'>
+                            <input type='hidden' name='userID' value='{userId}' />
+                            <input type='submit' value='Lobby beitreten'>
+                        </form>
+                    </body>
+                    </html>";
+
+                    SendResponse(response, lobbyPage, "text/html");
+                }
+                else
+                {
+                    response.StatusCode = (int)HttpStatusCode.Unauthorized;
+                    SendResponse(response, "Unauthorized access. Please log in.", "text/plain");
+                }
+            }
+            else
+            {
+                response.StatusCode = (int)HttpStatusCode.Unauthorized;
+                SendResponse(response, "Unauthorized access. Please log in.", "text/plain");
+            }
         }
     }
 }

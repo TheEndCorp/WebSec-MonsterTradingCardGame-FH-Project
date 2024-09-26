@@ -11,11 +11,13 @@ namespace SemesterProjekt1
     {
         public List<User> _users;
         public DatabaseHandler _databaseHandler;
+        private List<User> _lobby;
 
         public UserServiceHandler()
         {
             _databaseHandler = new DatabaseHandler();
             _users = _databaseHandler.LoadUser();
+            _lobby = new List<User>();
 
             // Initialize with default users if the list is empty
             if (_users.Count == 0)
@@ -28,11 +30,11 @@ namespace SemesterProjekt1
         private void InitializeDefaultUsers()
         {
             _users = new List<User>
-        {
-            new User(1,"Ender","123"),
-            new User(2, "John Doe", "test"),
-            new User(3, "Jane Smith", "test"),
-        };
+                {
+                    new User(1, "Ender", "123"),
+                    new User(2, "John Doe", "test"),
+                    new User(3, "Jane Smith", "test"),
+                };
         }
 
         public List<User> GetAllUsers()
@@ -88,8 +90,6 @@ namespace SemesterProjekt1
             return user;
         }
 
-
-
         public User OpenCardPack(int userId, string username, string password)
         {
             Console.WriteLine("Test");
@@ -107,6 +107,29 @@ namespace SemesterProjekt1
             return user;
         }
 
+        public void AddUserToLobby(User user)
+        {
+            if (!_lobby.Contains(user))
+            {
+                _lobby.Add(user);
+                if (_lobby.Count == 2)
+                {
+                    StartFight();
+                }
+            }
+        }
+
+        private void StartFight()
+        {
+            if (_lobby.Count == 2)
+            {
+                var player1 = _lobby[0];
+                var player2 = _lobby[1];
+                var fightLogic = new FightLogic(player1.Inventory.Deck.Cards, player2.Inventory.Deck.Cards);
+                fightLogic.StartBattle();
+                _lobby.Clear();
+            }
+        }
 
         private void SendResponse(HttpListenerResponse response, string content, string contentType)
         {
@@ -116,6 +139,18 @@ namespace SemesterProjekt1
             response.OutputStream.Write(buffer, 0, buffer.Length);
             response.OutputStream.Close();
         }
-
+        public void SaveDeck(int userId, List<Card> deck)
+        {
+            var user = GetUserById(userId);
+            if (user != null)
+            {
+                user.Inventory.Deck.Cards = deck;
+                _databaseHandler.SaveUsers(_users); // Save the updated user list to the database
+            }
+            else
+            {
+                throw new InvalidOperationException($"User with ID {userId} not found.");
+            }
+        }
     }
 }
