@@ -1,15 +1,15 @@
 ﻿using System;
 using System.Diagnostics;
 using System.Net;
-using System.Threading;
-using System.IO;
+using System.Threading.Tasks;
 
 namespace SemesterProjekt1
 {
     class Program
     {
-        static void Main()
+        static async Task Main()
         {
+            /*
             Console.WriteLine("Hallo, Welt!");
             User[] Team1 = new User[3];
             for (int i = 0; i < Team1.Length; i++)
@@ -32,8 +32,7 @@ namespace SemesterProjekt1
                 {
                     Console.WriteLine($"{person.Name} {person.Password}");
                 }
-            }
-
+            } */
 
             HttpListener listener = new HttpListener();
             listener.Prefixes.Add("http://localhost:8080/");
@@ -45,19 +44,38 @@ namespace SemesterProjekt1
                 UseShellExecute = true
             });
 
-
             UserServiceRequest requester = new UserServiceRequest();
+
+            // Zeige die Prozess-ID an
+            Console.WriteLine($"Prozess-ID: {Process.GetCurrentProcess().Id}");
 
             while (true)
             {
-                HttpListenerContext context = listener.GetContext();
-                requester.HandleRequest(context);
-                requester._userServiceHandler._databaseHandler.SaveUsers(requester._userServiceHandler._users);
-                Console.WriteLine("Action");
-
-
+                HttpListenerContext context = await listener.GetContextAsync();
+                _ = Task.Run(() => HandleRequestAsync(requester, context));
+                DisplayThreadPoolInfo();
             }
         }
-    }
 
+        private static async Task HandleRequestAsync(UserServiceRequest requester, HttpListenerContext context)
+        {
+            await requester.HandleRequestAsync(context);
+            await Task.Run(() => requester._userServiceHandler._databaseHandler.SaveUsers(requester._userServiceHandler._users));
+            Console.WriteLine("Action");
+        }
+
+        private static void DisplayThreadPoolInfo()
+        {
+            ThreadPool.GetAvailableThreads(out int workerThreads, out int completionPortThreads);
+            ThreadPool.GetMaxThreads(out int maxWorkerThreads, out int maxCompletionPortThreads);
+            ThreadPool.GetMinThreads(out int minWorkerThreads, out int minCompletionPortThreads);
+
+            Debug.WriteLine($"Verfügbare Worker-Threads: {workerThreads}");
+            Debug.WriteLine($"Verfügbare IO-Completion-Threads: {completionPortThreads}");
+            Debug.WriteLine($"Maximale Worker-Threads: {maxWorkerThreads}");
+            Debug.WriteLine($"Maximale IO-Completion-Threads: {maxCompletionPortThreads}");
+            Debug.WriteLine($"Minimale Worker-Threads: {minWorkerThreads}");
+            Debug.WriteLine($"Minimale IO-Completion-Threads: {minCompletionPortThreads}");
+        }
+    }
 }
