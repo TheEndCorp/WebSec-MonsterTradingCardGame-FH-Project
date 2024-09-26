@@ -2,6 +2,7 @@
 using System.Diagnostics;
 using System.Net;
 using System.Threading.Tasks;
+using System.Security.Principal;
 
 namespace SemesterProjekt1
 {
@@ -34,13 +35,30 @@ namespace SemesterProjekt1
                 }
             } */
 
+            static bool IsAdministrator()
+            {
+                var identity = WindowsIdentity.GetCurrent();
+                var principal = new WindowsPrincipal(identity);
+                return principal.IsInRole(WindowsBuiltInRole.Administrator);
+            }
+
+
+
+            if (!IsAdministrator())
+            {
+                Console.WriteLine("Die Anwendung wird nicht im Administratormodus ausgeführt. Verwende 'localhost' als lokale IP-Adresse.");
+            }
+
+
+            string localIPAddress = IsAdministrator() ? GetLocalIPAddress() : "localhost";
             HttpListener listener = new HttpListener();
-            listener.Prefixes.Add("http://localhost:8080/");
+            listener.Prefixes.Add($"http://{localIPAddress}:8080/");
+
             listener.Start();
             Console.WriteLine("Webstart...");
             Process.Start(new ProcessStartInfo
             {
-                FileName = "http://localhost:8080/users",
+                FileName = $"http://{localIPAddress}:8080/users",
                 UseShellExecute = true
             });
 
@@ -76,6 +94,19 @@ namespace SemesterProjekt1
             Debug.WriteLine($"Maximale IO-Completion-Threads: {maxCompletionPortThreads}");
             Debug.WriteLine($"Minimale Worker-Threads: {minWorkerThreads}");
             Debug.WriteLine($"Minimale IO-Completion-Threads: {minCompletionPortThreads}");
+        }
+
+        private static string GetLocalIPAddress()
+        {
+            var host = Dns.GetHostEntry(Dns.GetHostName());
+            foreach (var ip in host.AddressList)
+            {
+                if (ip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork)
+                {
+                    return ip.ToString();
+                }
+            }
+            throw new Exception("Keine IPv4-Adresse im lokalen Netzwerk gefunden.");
         }
     }
 }

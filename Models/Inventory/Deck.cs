@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.Text.Json.Serialization;
 
 namespace SemesterProjekt1
 {
@@ -11,10 +12,19 @@ namespace SemesterProjekt1
         private const int MaxCards = 20;
         public List<Card> Cards { get; set; }
 
+        [JsonConstructor]
+        public Deck(List<Card> Cards)
+        {
+            this.Cards = Cards ?? new List<Card>();
+        }
+
         public Deck()
         {
             Cards = new List<Card>();
         }
+
+
+
 
         public bool AddCard(Card card)
         {

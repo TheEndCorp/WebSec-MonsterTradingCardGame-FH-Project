@@ -79,6 +79,15 @@ namespace SemesterProjekt1
                 {
                     await HandleBuyPacksAsync(request, response);
                 }
+                else if (request.HttpMethod == "GET" && request.Url.AbsolutePath == "/lobby")
+                {
+                    SendLobbyPage(request, response);
+                }
+                else if (request.HttpMethod == "POST" && request.Url.AbsolutePath == "/join-lobby")
+                {
+                    await HandleJoinLobbyAsync(request, response);
+                }
+
                 else
                 {
                     response.StatusCode = (int)HttpStatusCode.NotFound;
@@ -91,8 +100,6 @@ namespace SemesterProjekt1
                 string errorMessage = $"Error: {ex.Message}\n{ex.StackTrace}";
                 SendResponse(response, errorMessage, "text/plain");
             }
-
-            DisplayThreadPoolInfo();
         }
 
         private async Task HandleAddUserAsync(HttpListenerRequest request, HttpListenerResponse response)
@@ -103,9 +110,18 @@ namespace SemesterProjekt1
                 var user = DeserializeUser(requestBody);
                 if (user != null)
                 {
-                    _userServiceHandler.AddUser(user);
-                    response.StatusCode = (int)HttpStatusCode.Created;
-                    SendResponse(response, SerializeToJson(new { message = "User created successfully" }), "application/json");
+                    var existingUser = _userServiceHandler.AuthenticateUser(user.Name, user.Password);
+                    if (existingUser == null)
+                    {
+                        _userServiceHandler.AddUser(user);
+                        response.StatusCode = (int)HttpStatusCode.Created;
+                        SendResponse(response, SerializeToJson(new { message = "User created successfully" }), "application/json");
+                    }
+                    else
+                    {
+                        response.StatusCode = (int)HttpStatusCode.Conflict;
+                        SendResponse(response, SerializeToJson(new { error = "User already exists" }), "application/json");
+                    }
                 }
                 else
                 {
@@ -131,7 +147,11 @@ namespace SemesterProjekt1
                     var inventory = user.Inventory;
                     if (inventory != null)
                     {
+                        string token = $"{user.Name}-mtcgToken";
                         string inventoryHtml = GenerateInventoryHtml(inventory);
+
+                        // Setzen des Cookies
+                        response.SetCookie(new Cookie("authToken", token));
                         response.SetCookie(new Cookie("userData", $"username={username}&password={password}&userid={user.Id}"));
 
                         SendResponse(response, inventoryHtml, "text/html");
@@ -272,6 +292,56 @@ namespace SemesterProjekt1
             response.OutputStream.Close();
         }
 
+
+
+        private async Task HandleJoinLobbyAsync(HttpListenerRequest request, HttpListenerResponse response)
+        {
+            using (var reader = new StreamReader(request.InputStream, request.ContentEncoding))
+            {
+                string requestBody = await reader.ReadToEndAsync();
+                var formData = System.Web.HttpUtility.ParseQueryString(requestBody);
+
+                var userDataCookie = request.Cookies["userData"]?.Value;
+                if (userDataCookie != null)
+                {
+                    var userData = System.Web.HttpUtility.ParseQueryString(userDataCookie);
+                    string username = userData["username"];
+                    string password = userData["password"];
+                    string userIdString = userData["userid"];
+                    int userId = int.Parse(userIdString);
+                    
+
+                    var user = _userServiceHandler.AuthenticateUser(username, password);
+                    if (user != null)
+                    {
+                        
+                        _userServiceHandler.AddUserToLobby(user);
+                        
+                        
+                        SendResponse(response, "User added to lobby", "text/plain");
+                    }
+                    else
+                    {
+                        response.StatusCode = (int)HttpStatusCode.Unauthorized;
+                        SendResponse(response, "Invalid username or password.", "text/plain");
+                    }
+                }
+                else
+                {
+                    response.StatusCode = (int)HttpStatusCode.BadRequest;
+                    SendResponse(response, "Invalid user ID.", "text/plain");
+                }
+            }
+
+            response.OutputStream.Close();
+        }
+
+
+        // In der Datei ServiceRequest.cs
+
+
+
+
         private void SendLoginPage(HttpListenerResponse response)
         {
             string loginForm = @"
@@ -343,23 +413,78 @@ namespace SemesterProjekt1
         {
             string html = $@"
             <!DOCTYPE html>
-            <html lang='en'>
+            <html lang='de'>
             <head>
                 <meta charset='UTF-8'>
                 <title>Inventory</title>
+                <style>
+                    .card {{
+                        display: inline-block;
+                        border: 1px solid #000;
+                        padding: 10px;
+                        margin: 5px;
+                        cursor: pointer;
+                    }}
+                    .selected {{
+                        background-color: #cfc;
+                    }}
+                </style>
+                <script>
+                    function toggleCard(cardIndex) {{
+                        let cardElement = document.getElementById('card-' + cardIndex);
+                        let card = {{
+                            Name: cardElement.getAttribute('data-name'),
+                            Damage: cardElement.getAttribute('data-damage'),
+                            Element: cardElement.getAttribute('data-element'),
+                            Type: cardElement.getAttribute('data-type')
+                        }};
+                        let deckInput = document.getElementById('deckInput');
+                        let deck = JSON.parse(deckInput.value || '[]');
+                        let deckIndex = deck.findIndex(c => c.Name === card.Name && c.Damage === card.Damage);
+
+                        if (deckIndex === -1) {{
+                            if (deck.length < 20) {{
+                                deck.push(card);
+                                cardElement.classList.add('selected');
+                            }} else {{
+                                alert('Sie können maximal 20 Karten auswählen.');
+                            }}
+                        }} else {{
+                            deck.splice(deckIndex, 1);
+                            cardElement.classList.remove('selected');
+                        }}
+
+                        deckInput.value = JSON.stringify(deck);
+                    }}
+
+                    function saveDeck() {{
+                        let deckInput = document.getElementById('deckInput');
+                        let deck = JSON.parse(deckInput.value || '[]');
+                        document.getElementById('deckInput').value = JSON.stringify(deck);
+                    }}
+                </script>
             </head>
             <body>
                 <h1>Inventory</h1>
                 <h2>Owned Cards</h2>
-                <ul>";
-
-            foreach (var card in inventory.OwnedCards)
-            {
-                html += $"<li>{card.Name} - {card.Damage} Damage - {card.Element} - {card.Type}</li>";
-            }
-
-            html += $@"
+                <div id='cardsContainer'>
+                    {string.Join("", inventory.OwnedCards.Select((card, index) => $@"
+                        <div id='card-{index}' class='card' data-name='{card.Name}' data-damage='{card.Damage}' data-element='{card.Element}' data-type='{card.Type}' onclick='toggleCard({index})'>
+                            <p>Name: {card.Name}</p>
+                            <p>Damage: {card.Damage}</p>
+                            <p>Element: {card.Element}</p>
+                            <p>Type: {card.Type}</p>
+                        </div>
+                    "))}
+                </div>
+                <h2>Deck</h2>
+                <ul id='deckList'>
+                    <!-- Deck items will be dynamically added here -->
                 </ul>
+                <form method='post' action='/save-deck'>
+                    <input type='hidden' name='deck' id='deckInput'>
+                    <input type='submit' value='Save Deck' onclick='saveDeck()'>
+                </form>
                 <h2>Money: {inventory.Money}</h2>
                 <form method='post' action='/openpack'>
                     <input type='hidden' name='userID' value='{inventory.UserID}' />
@@ -371,6 +496,9 @@ namespace SemesterProjekt1
                     <input type='number' id='Amount' name='Amount' required><br>
                     <input type='submit' value='Buy Card Pack'>
                 </form>
+                <form method='get' action='/lobby'>
+                    <input type='submit' value='Zur Lobby'>
+                </form>
                 <form method='post' action='/logout'>
                     <input type='submit' value='Logout'>
                 </form>
@@ -378,19 +506,50 @@ namespace SemesterProjekt1
             </html>";
             return html;
         }
-
-        private void DisplayThreadPoolInfo()
+        private void SendLobbyPage(HttpListenerRequest request, HttpListenerResponse response)
         {
-            ThreadPool.GetAvailableThreads(out int workerThreads, out int completionPortThreads);
-            ThreadPool.GetMaxThreads(out int maxWorkerThreads, out int maxCompletionPortThreads);
-            ThreadPool.GetMinThreads(out int minWorkerThreads, out int minCompletionPortThreads);
+            var userDataCookie = request.Cookies["userData"]?.Value;
+            if (userDataCookie != null)
+            {
+                var userData = System.Web.HttpUtility.ParseQueryString(userDataCookie);
+                string username = userData["username"];
+                string password = userData["password"];
+                string userIdString = userData["userid"];
+                int userId = int.Parse(userIdString);
 
-            Console.WriteLine($"Verfügbare Worker-Threads: {workerThreads}");
-            Console.WriteLine($"Verfügbare IO-Completion-Threads: {completionPortThreads}");
-            Console.WriteLine($"Maximale Worker-Threads: {maxWorkerThreads}");
-            Console.WriteLine($"Maximale IO-Completion-Threads: {maxCompletionPortThreads}");
-            Console.WriteLine($"Minimale Worker-Threads: {minWorkerThreads}");
-            Console.WriteLine($"Minimale IO-Completion-Threads: {minCompletionPortThreads}");
+                var user = _userServiceHandler.AuthenticateUser(username, password);
+                if (user != null)
+                {
+                    string lobbyPage = $@"
+                    <!DOCTYPE html>
+                    <html lang='de'>
+                    <head>
+                        <meta charset='UTF-8'>
+                        <title>Lobby</title>
+                    </head>
+                    <body>
+                        <h1>Lobby</h1>
+                        <p>ID: {user.Inventory.UserID}</p>
+                        <form id='joinLobbyForm' method='post' action='/join-lobby'>
+                            <input type='hidden' name='userID' value='{userId}' />
+                            <input type='submit' value='Lobby beitreten'>
+                        </form>
+                    </body>
+                    </html>";
+
+                    SendResponse(response, lobbyPage, "text/html");
+                }
+                else
+                {
+                    response.StatusCode = (int)HttpStatusCode.Unauthorized;
+                    SendResponse(response, "Unauthorized access. Please log in.", "text/plain");
+                }
+            }
+            else
+            {
+                response.StatusCode = (int)HttpStatusCode.Unauthorized;
+                SendResponse(response, "Unauthorized access. Please log in.", "text/plain");
+            }
         }
     }
 }
