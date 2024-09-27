@@ -87,7 +87,10 @@ namespace SemesterProjekt1
                 {
                     await HandleJoinLobbyAsync(request, response);
                 }
-
+                else if (request.HttpMethod == "POST" && request.Url.AbsolutePath == "/add-card-to-deck")
+                {
+                    await HandleAddCardToDeckAsync(request, response);
+                }
                 else
                 {
                     response.StatusCode = (int)HttpStatusCode.NotFound;
@@ -337,7 +340,55 @@ namespace SemesterProjekt1
         }
 
 
-        // In der Datei ServiceRequest.cs
+        // ...
+
+        private async Task HandleAddCardToDeckAsync(HttpListenerRequest request, HttpListenerResponse response)
+        {
+            try
+            {
+                using (var reader = new StreamReader(request.InputStream, request.ContentEncoding))
+                {
+                    string requestBody = await reader.ReadToEndAsync();
+                    var formData = System.Web.HttpUtility.ParseQueryString(requestBody);
+
+                    var userDataCookie = request.Cookies["userData"]?.Value;
+                    if (userDataCookie != null)
+                    {
+                        var userData = System.Web.HttpUtility.ParseQueryString(userDataCookie);
+                        string username = userData["username"];
+                        string password = userData["password"];
+                        string userIdString = userData["userid"];
+                        int userId = int.Parse(userIdString);
+
+                        var user = _userServiceHandler.AuthenticateUser(username, password);
+                        string[] cardIndices = formData.GetValues("cardIndices");
+
+                        if (cardIndices != null)
+                        {
+                            int[] cardPositions = cardIndices.Select(int.Parse).ToArray();
+                            _userServiceHandler.AddCardToDeck(user.Id, user.Name, user.Password, cardPositions);
+                            SendResponse(response, "Cards added to deck successfully.", "text/html");
+                        }
+                        else
+                        {
+                            response.StatusCode = (int)HttpStatusCode.BadRequest;
+                            SendResponse(response, "Invalid card positions.", "text/plain");
+                        }
+                    }
+                    else
+                    {
+                        response.StatusCode = (int)HttpStatusCode.BadRequest;
+                        SendResponse(response, "Invalid user credentials.", "text/plain");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                response.StatusCode = (int)HttpStatusCode.InternalServerError;
+                SendResponse(response, ex.Message, "text/plain");
+            }
+        }
+
 
 
 
@@ -421,15 +472,24 @@ namespace SemesterProjekt1
             <body>
                 <h1>Inventory</h1>
                 <h2>Owned Cards</h2>
-                <ul>";
+                <form method='post' action='/add-card-to-deck'>
+                    <ul>";
 
             foreach (var card in inventory.OwnedCards)
             {
-                html += $"<li>{card.Name} - {card.Damage} Damage - {card.Element} - {card.Type}</li>";
+                int cardIndex = inventory.OwnedCards.IndexOf(card);
+                html += $@"
+                    <li>
+                        <input type='checkbox' name='cardIndices' value='{cardIndex}'>
+                        {cardIndex} : {card.Name} - {card.Damage} Damage - {card.Element} - {card.Type}
+                    </li>";
             }
 
             html += $@"
-                </ul>
+                    </ul>
+                    <input type='hidden' name='userID' value='{inventory.UserID}' />
+                    <input type='submit' value='Save to Deck'>
+                </form>
                 <h2>Money: {inventory.Money}</h2>
                 <form method='post' action='/openpack'>
                     <input type='hidden' name='userID' value='{inventory.UserID}' />

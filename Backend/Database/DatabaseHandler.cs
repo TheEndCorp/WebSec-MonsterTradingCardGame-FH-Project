@@ -27,7 +27,19 @@ namespace SemesterProjekt1
             };
             try
             {
-                return JsonSerializer.Deserialize<List<User>>(json, options) ?? new List<User>();
+                var users = JsonSerializer.Deserialize<List<User>>(json, options) ?? new List<User>();
+                foreach (var user in users)
+                {
+                    // Ensure cards in deck are added to the user's deck
+                    foreach (var card in user.Inventory.OwnedCards)
+                    {
+                        if (card.InDeck)
+                        {
+                            user.Inventory.Deck.AddCard(card);
+                        }
+                    }
+                }
+                return users;
             }
             catch (JsonException ex)
             {
@@ -130,10 +142,8 @@ namespace SemesterProjekt1
                 {
                     return new MonsterCard(name, damage, (CardTypes.ElementType)element, (CardTypes.Rarity)rarityType, inDeck, userID);
                 }
-                
             }
         }
-
 
         public override void Write(Utf8JsonWriter writer, Card value, JsonSerializerOptions options)
         {

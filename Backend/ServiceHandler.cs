@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Net;
 
 
@@ -152,5 +153,35 @@ namespace SemesterProjekt1
                 throw new InvalidOperationException($"User with ID {userId} not found.");
             }
         }
+
+
+
+        public User AddCardToDeck(int userId, string username, string password, int[] cardpos)
+        {
+            Console.WriteLine("Test");
+            var user = _users.Find(p => p.Id == userId && p.Name == username && p.Password == password);
+            if (user != null && AuthenticateUser(username, password) != null)
+            {
+                if (user.Inventory.OwnedCards.Count > 0)
+                {
+
+                    var CardsList = user.Inventory.OwnedCards;
+
+                    for (int i = 0; i < cardpos.Count(); i++)
+                    {
+                        user.Inventory.Deck.AddCard(CardsList[cardpos[i]]);
+                    }
+                    
+                    _databaseHandler.SaveUsers(_users);
+                }
+            }
+            return user;
+        }
+
+
+
+
+
+
     }
 }
