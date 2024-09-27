@@ -413,23 +413,78 @@ namespace SemesterProjekt1
         {
             string html = $@"
             <!DOCTYPE html>
-            <html lang='en'>
+            <html lang='de'>
             <head>
                 <meta charset='UTF-8'>
                 <title>Inventory</title>
+                <style>
+                    .card {{
+                        display: inline-block;
+                        border: 1px solid #000;
+                        padding: 10px;
+                        margin: 5px;
+                        cursor: pointer;
+                    }}
+                    .selected {{
+                        background-color: #cfc;
+                    }}
+                </style>
+                <script>
+                    function toggleCard(cardIndex) {{
+                        let cardElement = document.getElementById('card-' + cardIndex);
+                        let card = {{
+                            Name: cardElement.getAttribute('data-name'),
+                            Damage: cardElement.getAttribute('data-damage'),
+                            Element: cardElement.getAttribute('data-element'),
+                            Type: cardElement.getAttribute('data-type')
+                        }};
+                        let deckInput = document.getElementById('deckInput');
+                        let deck = JSON.parse(deckInput.value || '[]');
+                        let deckIndex = deck.findIndex(c => c.Name === card.Name && c.Damage === card.Damage);
+
+                        if (deckIndex === -1) {{
+                            if (deck.length < 20) {{
+                                deck.push(card);
+                                cardElement.classList.add('selected');
+                            }} else {{
+                                alert('Sie können maximal 20 Karten auswählen.');
+                            }}
+                        }} else {{
+                            deck.splice(deckIndex, 1);
+                            cardElement.classList.remove('selected');
+                        }}
+
+                        deckInput.value = JSON.stringify(deck);
+                    }}
+
+                    function saveDeck() {{
+                        let deckInput = document.getElementById('deckInput');
+                        let deck = JSON.parse(deckInput.value || '[]');
+                        document.getElementById('deckInput').value = JSON.stringify(deck);
+                    }}
+                </script>
             </head>
             <body>
                 <h1>Inventory</h1>
                 <h2>Owned Cards</h2>
-                <ul>";
-
-            foreach (var card in inventory.OwnedCards)
-            {
-                html += $"<li>{card.Name} - {card.Damage} Damage - {card.Element} - {card.Type}</li>";
-            }
-
-            html += $@"
+                <div id='cardsContainer'>
+                    {string.Join("", inventory.OwnedCards.Select((card, index) => $@"
+                        <div id='card-{index}' class='card' data-name='{card.Name}' data-damage='{card.Damage}' data-element='{card.Element}' data-type='{card.Type}' onclick='toggleCard({index})'>
+                            <p>Name: {card.Name}</p>
+                            <p>Damage: {card.Damage}</p>
+                            <p>Element: {card.Element}</p>
+                            <p>Type: {card.Type}</p>
+                        </div>
+                    "))}
+                </div>
+                <h2>Deck</h2>
+                <ul id='deckList'>
+                    <!-- Deck items will be dynamically added here -->
                 </ul>
+                <form method='post' action='/save-deck'>
+                    <input type='hidden' name='deck' id='deckInput'>
+                    <input type='submit' value='Save Deck' onclick='saveDeck()'>
+                </form>
                 <h2>Money: {inventory.Money}</h2>
                 <form method='post' action='/openpack'>
                     <input type='hidden' name='userID' value='{inventory.UserID}' />
@@ -440,6 +495,9 @@ namespace SemesterProjekt1
                     <label for='Amount'>Amount:</label>
                     <input type='number' id='Amount' name='Amount' required><br>
                     <input type='submit' value='Buy Card Pack'>
+                </form>
+                <form method='get' action='/lobby'>
+                    <input type='submit' value='Zur Lobby'>
                 </form>
                 <form method='post' action='/logout'>
                     <input type='submit' value='Logout'>
