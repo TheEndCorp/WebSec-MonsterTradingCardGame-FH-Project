@@ -50,16 +50,31 @@ namespace SemesterProjekt1
 
         public void AddUser(User user)
         {
+            if (_users.Any(u => u.Username == user.Username))
+            {
+                throw new InvalidOperationException("Ein Benutzer mit diesem Benutzernamen existiert bereits.");
+            }
             _users.Add(user);
             _databaseHandler.SaveUsers(_users);
         }
+
+        public User GetUserByName(string username)
+        {
+            return _users.Find(p => p.Username == username);
+        }
+
+
+
+
+
+
 
         public void UpdateUser(int id, User updatedUser)
         {
             var user = GetUserById(id);
             if (user != null)
             {
-                user.Name = updatedUser.Name;
+                user.Username = updatedUser.Username;
                 user.Password = updatedUser.Password;
                 _databaseHandler.SaveUsers(_users);
             }
@@ -77,7 +92,7 @@ namespace SemesterProjekt1
 
         public User AuthenticateUser(string username, string password)
         {
-            return _users.Find(u => u.Name == username && u.Password == password);
+            return _users.Find(u => u.Username == username && u.Password == password);
         }
 
         public User BuyPacks(int Userid, int amount, string username, string password)
@@ -94,7 +109,7 @@ namespace SemesterProjekt1
         public User OpenCardPack(int userId, string username, string password)
         {
             Console.WriteLine("Test");
-            var user = _users.Find(p => p.Id == userId && p.Name == username && p.Password == password);
+            var user = _users.Find(p => p.Id == userId && p.Username == username && p.Password == password);
             if (user != null && AuthenticateUser(username, password) != null)
             {
                 if (user.Inventory.CardPacks.Count > 0)
@@ -159,7 +174,7 @@ namespace SemesterProjekt1
         public User AddCardToDeck(int userId, string username, string password, int[] cardpos)
         {
             Console.WriteLine("Test");
-            var user = _users.Find(p => p.Id == userId && p.Name == username && p.Password == password);
+            var user = _users.Find(p => p.Id == userId && p.Username == username && p.Password == password);
             if (user != null && AuthenticateUser(username, password) != null)
             {
                 if (user.Inventory.OwnedCards.Count > 0)

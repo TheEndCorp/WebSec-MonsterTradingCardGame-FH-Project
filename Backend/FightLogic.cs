@@ -7,7 +7,7 @@ using static SemesterProjekt1.CardTypes;
 
 namespace SemesterProjekt1
 {
-    public class FightLogic : CardTypes 
+    public class FightLogic : CardTypes
     {
         private List<Card> player1Deck;
         private List<Card> player2Deck;
@@ -54,6 +54,19 @@ namespace SemesterProjekt1
             }
 
             Console.WriteLine("Kampf beendet!");
+
+            if (player1Deck.Count > player2Deck.Count)
+            {
+                Console.WriteLine("Spieler 1 gewinnt den Kampf!");
+            }
+            else if (player2Deck.Count > player1Deck.Count)
+            {
+                Console.WriteLine("Spieler 2 gewinnt den Kampf!");
+            }
+            else
+            {
+                Console.WriteLine("Der Kampf endet unentschieden!");
+            }
         }
 
         private int CalculateDamage(Card attacker, Card defender)
@@ -99,7 +112,6 @@ namespace SemesterProjekt1
             }
 
             return damage;
-
         }
     }
 }

@@ -69,14 +69,14 @@ namespace SemesterProjekt1
                 throw new JsonException("Expected StartObject token");
 
             int id = default;
-            string name = string.Empty;
+            string username = string.Empty;
             string password = string.Empty;
             Inventory inventory = default;
 
             while (reader.Read())
             {
                 if (reader.TokenType == JsonTokenType.EndObject)
-                    return new User(id, name, password, inventory);
+                    return new User(id, username, password, inventory);
 
                 if (reader.TokenType != JsonTokenType.PropertyName)
                     throw new JsonException("Expected PropertyName token");
@@ -89,8 +89,8 @@ namespace SemesterProjekt1
                     case nameof(User.Id):
                         id = reader.GetInt32();
                         break;
-                    case nameof(User.Name):
-                        name = reader.GetString() ?? string.Empty;
+                    case nameof(User.Username):
+                        username = reader.GetString() ?? string.Empty;
                         break;
                     case nameof(User.Password):
                         password = reader.GetString() ?? string.Empty;
@@ -110,7 +110,7 @@ namespace SemesterProjekt1
         {
             writer.WriteStartObject();
             writer.WriteNumber(nameof(User.Id), value.Id);
-            writer.WriteString(nameof(User.Name), value.Name);
+            writer.WriteString(nameof(User.Username), value.Username);
             writer.WriteString(nameof(User.Password), value.Password);
             writer.WritePropertyName(nameof(User.Inventory));
             JsonSerializer.Serialize(writer, value.Inventory, options);

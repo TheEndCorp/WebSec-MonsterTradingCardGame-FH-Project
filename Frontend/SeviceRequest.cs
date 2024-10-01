@@ -2,6 +2,7 @@
 using System.IO;
 using System.Net;
 using System.Text.Json;
+using static Microsoft.ApplicationInsights.MetricDimensionNames.TelemetryContext;
 
 
 namespace SemesterProjekt1
@@ -67,6 +68,10 @@ namespace SemesterProjekt1
                 {
                     await HandleLoginAsync(request, response);
                 }
+                else if (request.HttpMethod == "POST" && request.Url.AbsolutePath == "/sessions") //FOR CURL I GUESS
+                {
+                    await HandleLoginAsyncCURL(request, response);
+                }
                 else if (request.HttpMethod == "POST" && request.Url.AbsolutePath == "/logout")
                 {
                     HandleLogout(request, response);
@@ -113,7 +118,7 @@ namespace SemesterProjekt1
                 var user = DeserializeUser(requestBody);
                 if (user != null)
                 {
-                    var existingUser = _userServiceHandler.AuthenticateUser(user.Name, user.Password);
+                    var existingUser = _userServiceHandler.GetUserByName(user.Username);
                     if (existingUser == null)
                     {
                         _userServiceHandler.AddUser(user);
@@ -150,7 +155,7 @@ namespace SemesterProjekt1
                     var inventory = user.Inventory;
                     if (inventory != null)
                     {
-                        string token = $"{user.Name}-mtcgToken";
+                        string token = $"{user.Username}-mtcgToken";
                         string inventoryHtml = GenerateInventoryHtml(inventory);
 
                         // Setzen des Cookies
@@ -170,11 +175,64 @@ namespace SemesterProjekt1
                 else
                 {
                     response.StatusCode = (int)HttpStatusCode.Unauthorized;
-                    SendResponse(response, "Invalid username or password.", "text/plain");
+                    SendResponse(response, $"Invalid username or password. {username}+{password}", "text/plain");
                 }
             }
             response.OutputStream.Close();
         }
+
+
+
+
+        private async Task HandleLoginAsyncCURL(HttpListenerRequest request, HttpListenerResponse response)
+        {
+
+            using (var reader = new StreamReader(request.InputStream))
+            {
+                var requestBody = await reader.ReadToEndAsync();
+                string username = null;
+                string password = null;
+                
+
+                if (request.ContentType == "application/json")
+                {
+                    var user1 = JsonSerializer.Deserialize<User>(requestBody);
+                    username = user1.Username;
+                    password = user1.Password;
+                }
+
+                var user = _userServiceHandler.AuthenticateUser(username, password);
+                if (user != null)
+                {
+                    var authenticatedUser = _userServiceHandler.AuthenticateUser(username, password);
+                    if (authenticatedUser != null)
+                    {
+                        string token = $"{user.Username}-mtcgToken";
+
+                        // Setzen des Cookies
+                        response.SetCookie(new Cookie("authToken", token));
+                        response.SetCookie(new Cookie("userData", $"username={username}&password={password}&userid={user.Id}"));
+
+                        SendResponse(response,token , "text/html");
+                    }
+                    else
+                    {
+                        response.StatusCode = (int)HttpStatusCode.Unauthorized;
+                        response.Close();
+                    }
+                }
+                else
+                {
+                    response.StatusCode = (int)HttpStatusCode.BadRequest;
+                    response.Close();
+                }
+            }
+        }
+
+
+
+
+
 
         private void HandleLogout(HttpListenerRequest request, HttpListenerResponse response)
         {
@@ -366,7 +424,7 @@ namespace SemesterProjekt1
                         if (cardIndices != null)
                         {
                             int[] cardPositions = cardIndices.Select(int.Parse).ToArray();
-                            _userServiceHandler.AddCardToDeck(user.Id, user.Name, user.Password, cardPositions);
+                            _userServiceHandler.AddCardToDeck(user.Id, user.Username, user.Password, cardPositions);
                             SendResponse(response, "Cards added to deck successfully.", "text/html");
                         }
                         else
@@ -501,6 +559,10 @@ namespace SemesterProjekt1
                     <input type='number' id='Amount' name='Amount' required><br>
                     <input type='submit' value='Buy Card Pack'>
                 </form>
+                <form id='joinLobbyForm' method='post' action='/join-lobby'>
+                 <input type='hidden' name='userID' value='{inventory.UserID}' />
+                 <input type='submit' value='Lobby beitreten'>
+                 </form>
                 <form method='post' action='/logout'>
                     <input type='submit' value='Logout'>
                 </form>

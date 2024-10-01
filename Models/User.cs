@@ -8,7 +8,7 @@ namespace SemesterProjekt1
     public class User
     {
         private int _id;
-        private string _name;
+        private string _username;
         private string _password;
         private Inventory _Inventory;
 
@@ -16,18 +16,18 @@ namespace SemesterProjekt1
 
 
 
-        public User(int id, string name, string password)
+        public User(int id, string username, string password)
         {
             this._id = id;
-            this._name = name;
+            this._username = username;
             this._password = password;
             this._Inventory = new Inventory(this._id);
         }
         [JsonConstructor]
-        public User(int id, string name, string password, Inventory inventory)
+        public User(int id, string username, string password, Inventory inventory)
         {
             this._id = id;
-            this._name = name;
+            this._username = username;
             this._password = password;
             this._Inventory = inventory ?? new Inventory(this._id);
 
@@ -36,7 +36,7 @@ namespace SemesterProjekt1
 
         ~User()
         {
-            Console.WriteLine($"User {_name}, {_password} wird zerstört.");
+            Console.WriteLine($"User {_username}, {_password} wird zerstört.");
         }
 
         public int Id
@@ -45,10 +45,10 @@ namespace SemesterProjekt1
             set { _id = value; }
         }
 
-        public string Name
+        public string Username
         {
-            get { return _name; }
-            set { _name = value; }
+            get { return _username; }
+            set { _username = value; }
         }
 
         public string Password
