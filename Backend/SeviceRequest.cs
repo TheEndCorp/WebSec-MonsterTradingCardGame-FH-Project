@@ -11,6 +11,10 @@ namespace SemesterProjekt1
     public class UserServiceRequest
     {
         public UserServiceHandler _userServiceHandler = new UserServiceHandler();
+        
+        private HTMLGEN _htmlgen = new HTMLGEN(_userServiceHandler: new UserServiceHandler());
+
+
 
         public async Task HandleRequestAsync(HttpListenerContext context)
         {
@@ -24,7 +28,7 @@ namespace SemesterProjekt1
                     var users = _userServiceHandler.GetAllUsers();
                     int size = users.Count;
 
-                    string htmlResponse = GenerateOptionsPage(size);
+                    string htmlResponse = _htmlgen.GenerateOptionsPage(size);
                     SendResponse(response, htmlResponse, "text/html");
                 }
                 else if (request.HttpMethod == "GET" && request.Url.AbsolutePath == "/users")
@@ -62,7 +66,7 @@ namespace SemesterProjekt1
                 }
                 else if (request.HttpMethod == "GET" && request.Url.AbsolutePath == "/login")
                 {
-                    SendLoginPage(response);
+                    _htmlgen.SendLoginPage(response);
                 }
                 else if (request.HttpMethod == "POST" && request.Url.AbsolutePath == "/login")
                 {
@@ -86,7 +90,7 @@ namespace SemesterProjekt1
                 }
                 else if (request.HttpMethod == "GET" && request.Url.AbsolutePath == "/lobby")
                 {
-                    SendLobbyPage(request, response);
+                    _htmlgen.SendLobbyPage(request, response);
                 }
                 else if (request.HttpMethod == "POST" && request.Url.AbsolutePath == "/join-lobby")
                 {
@@ -156,7 +160,7 @@ namespace SemesterProjekt1
                     if (inventory != null)
                     {
                         string token = $"{user.Username}-mtcgToken";
-                        string inventoryHtml = GenerateInventoryHtml(inventory);
+                        string inventoryHtml = _htmlgen.GenerateInventoryHtml(inventory);
 
                         // Setzen des Cookies
                         response.SetCookie(new Cookie("authToken", token));
@@ -192,7 +196,7 @@ namespace SemesterProjekt1
                 var requestBody = await reader.ReadToEndAsync();
                 string username = null;
                 string password = null;
-                
+
 
                 if (request.ContentType == "application/json")
                 {
@@ -213,7 +217,7 @@ namespace SemesterProjekt1
                         response.SetCookie(new Cookie("authToken", token));
                         response.SetCookie(new Cookie("userData", $"username={username}&password={password}&userid={user.Id}"));
 
-                        SendResponse(response,token , "text/html");
+                        SendResponse(response, token, "text/html");
                     }
                     else
                     {
@@ -370,15 +374,15 @@ namespace SemesterProjekt1
                     string password = userData["password"];
                     string userIdString = userData["userid"];
                     int userId = int.Parse(userIdString);
-                    
+
 
                     var user = _userServiceHandler.AuthenticateUser(username, password);
                     if (user != null)
                     {
-                        
+
                         _userServiceHandler.AddUserToLobby(user);
-                        
-                        
+
+
                         SendResponse(response, "User added to lobby", "text/plain");
                     }
                     else
@@ -398,7 +402,7 @@ namespace SemesterProjekt1
         }
 
 
-        // ...
+
 
         private async Task HandleAddCardToDeckAsync(HttpListenerRequest request, HttpListenerResponse response)
         {
@@ -448,34 +452,7 @@ namespace SemesterProjekt1
         }
 
 
-
-
-
-        private void SendLoginPage(HttpListenerResponse response)
-        {
-            string loginForm = @"
-            <!DOCTYPE html>
-            <html lang='en'>
-            <head>
-                <meta charset='UTF-8'>
-                <title>Login</title>
-            </head>
-            <body>
-                <h1>Login</h1>
-                <form method='post' action='/login'>
-                    <label for='username'>Username:</label>
-                    <input type='text' id='username' name='username'><br>
-                    <label for='password'>Password:</label>
-                    <input type='password' id='password' name='password'><br>
-                    <input type='submit' value='Login'>
-                </form>
-            </body>
-            </html>";
-
-            SendResponse(response, loginForm, "text/html");
-        }
-
-        private void SendResponse(HttpListenerResponse response, string content, string contentType)
+        public void SendResponse(HttpListenerResponse response, string content, string contentType)
         {
             byte[] buffer = System.Text.Encoding.UTF8.GetBytes(content);
             response.ContentLength64 = buffer.Length;
@@ -495,125 +472,7 @@ namespace SemesterProjekt1
             return JsonSerializer.Serialize(obj);
         }
 
-        private string GenerateOptionsPage(int size)
-        {
-            string htmlResponse = @"
-            <!DOCTYPE html>
-            <html lang='en'>
-            <head>
-                <meta charset='UTF-8'>
-                <title>Options</title>
-            </head>
-            <body>
-                <h1>Options</h1>
-                <button onclick='window.location.href=""/users"";'>Show All Users</button>
-                <button onclick='window.location.href=""/login"";'>Login</button>";
 
-            for (int i = 1; i <= size; i++)
-            {
-                htmlResponse += $@"<button onclick='window.location.href=""/user/{i}"";'>Show User with ID {i}</button>";
-            }
 
-            htmlResponse += "</body></html>";
-            return htmlResponse;
-        }
-
-        private string GenerateInventoryHtml(Inventory inventory)
-        {
-            string html = $@"
-            <!DOCTYPE html>
-            <html lang='en'>
-            <head>
-                <meta charset='UTF-8'>
-                <title>Inventory</title>
-            </head>
-            <body>
-                <h1>Inventory</h1>
-                <h2>Owned Cards</h2>
-                <form method='post' action='/add-card-to-deck'>
-                    <ul>";
-
-            foreach (var card in inventory.OwnedCards)
-            {
-                int cardIndex = inventory.OwnedCards.IndexOf(card);
-                html += $@"
-                    <li>
-                        <input type='checkbox' name='cardIndices' value='{cardIndex}'>
-                        {cardIndex} : {card.Name} - {card.Damage} Damage - {card.Element} - {card.Type}
-                    </li>";
-            }
-
-            html += $@"
-                    </ul>
-                    <input type='hidden' name='userID' value='{inventory.UserID}' />
-                    <input type='submit' value='Save to Deck'>
-                </form>
-                <h2>Money: {inventory.Money}</h2>
-                <form method='post' action='/openpack'>
-                    <input type='hidden' name='userID' value='{inventory.UserID}' />
-                    <input type='submit' value='Open Card Pack'>
-                </form>
-                <form method='post' action='/inventory'>
-                    <input type='hidden' name='userID' value='{inventory.UserID}' />
-                    <label for='Amount'>Amount:</label>
-                    <input type='number' id='Amount' name='Amount' required><br>
-                    <input type='submit' value='Buy Card Pack'>
-                </form>
-                <form id='joinLobbyForm' method='post' action='/join-lobby'>
-                 <input type='hidden' name='userID' value='{inventory.UserID}' />
-                 <input type='submit' value='Lobby beitreten'>
-                 </form>
-                <form method='post' action='/logout'>
-                    <input type='submit' value='Logout'>
-                </form>
-            </body>
-            </html>";
-            return html;
-        }
-        private void SendLobbyPage(HttpListenerRequest request, HttpListenerResponse response)
-        {
-            var userDataCookie = request.Cookies["userData"]?.Value;
-            if (userDataCookie != null)
-            {
-                var userData = System.Web.HttpUtility.ParseQueryString(userDataCookie);
-                string username = userData["username"];
-                string password = userData["password"];
-                string userIdString = userData["userid"];
-                int userId = int.Parse(userIdString);
-
-                var user = _userServiceHandler.AuthenticateUser(username, password);
-                if (user != null)
-                {
-                    string lobbyPage = $@"
-                    <!DOCTYPE html>
-                    <html lang='de'>
-                    <head>
-                        <meta charset='UTF-8'>
-                        <title>Lobby</title>
-                    </head>
-                    <body>
-                        <h1>Lobby</h1>
-                        <p>ID: {user.Inventory.UserID}</p>
-                        <form id='joinLobbyForm' method='post' action='/join-lobby'>
-                            <input type='hidden' name='userID' value='{userId}' />
-                            <input type='submit' value='Lobby beitreten'>
-                        </form>
-                    </body>
-                    </html>";
-
-                    SendResponse(response, lobbyPage, "text/html");
-                }
-                else
-                {
-                    response.StatusCode = (int)HttpStatusCode.Unauthorized;
-                    SendResponse(response, "Unauthorized access. Please log in.", "text/plain");
-                }
-            }
-            else
-            {
-                response.StatusCode = (int)HttpStatusCode.Unauthorized;
-                SendResponse(response, "Unauthorized access. Please log in.", "text/plain");
-            }
-        }
     }
 }
