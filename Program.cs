@@ -52,13 +52,13 @@ namespace SemesterProjekt1
 
             string localIPAddress = IsAdministrator() ? GetLocalIPAddress() : "localhost";
             HttpListener listener = new HttpListener();
-            listener.Prefixes.Add($"http://{localIPAddress}:8080/");
+            listener.Prefixes.Add($"http://{localIPAddress}:10001/");
 
             listener.Start();
             Console.WriteLine("Webstart...");
             Process.Start(new ProcessStartInfo
             {
-                FileName = $"http://{localIPAddress}:8080/users",
+                FileName = $"http://{localIPAddress}:10001/users",
                 UseShellExecute = true
             });
 
