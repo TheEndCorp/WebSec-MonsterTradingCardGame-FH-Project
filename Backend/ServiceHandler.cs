@@ -20,7 +20,6 @@ namespace SemesterProjekt1
             _users = _databaseHandler.LoadUser();
             _lobby = new List<User>();
 
-            // Initialize with default users if the list is empty
             if (_users.Count == 0)
             {
                 InitializeDefaultUsers();
@@ -62,10 +61,6 @@ namespace SemesterProjekt1
         {
             return _users.Find(p => p.Username == username);
         }
-
-
-
-
 
 
 
@@ -161,7 +156,7 @@ namespace SemesterProjekt1
             if (user != null)
             {
                 user.Inventory.Deck.Cards = deck;
-                _databaseHandler.SaveUsers(_users); // Save the updated user list to the database
+                _databaseHandler.SaveUsers(_users); 
             }
             else
             {

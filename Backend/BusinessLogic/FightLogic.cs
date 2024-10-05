@@ -89,7 +89,7 @@ namespace SemesterProjekt1
                 }
             }
 
-            // Implementierung der Spezialregeln
+       
             if (attacker.Name == "Goblin" && defender.Name == "Dragon")
             {
                 damage = 0;

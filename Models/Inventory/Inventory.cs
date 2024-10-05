@@ -61,7 +61,7 @@ namespace SemesterProjekt1
 
             while (amount > 0 && Money >= 5 * amount)
             {
-                CardPacks.Add(new CardPack(UserID)); // Create a new instance for each pack
+                CardPacks.Add(new CardPack(UserID));
                 Money -= 5;
                 amount--;
             }

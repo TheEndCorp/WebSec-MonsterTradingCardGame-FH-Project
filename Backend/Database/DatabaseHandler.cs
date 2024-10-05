@@ -30,7 +30,7 @@ namespace SemesterProjekt1
                 var users = JsonSerializer.Deserialize<List<User>>(json, options) ?? new List<User>();
                 foreach (var user in users)
                 {
-                    // Ensure cards in deck are added to the user's deck
+                   
                     foreach (var card in user.Inventory.OwnedCards)
                     {
                         if (card.InDeck)
@@ -43,7 +43,7 @@ namespace SemesterProjekt1
             }
             catch (JsonException ex)
             {
-                // Log the exception or handle it as needed
+                
                 throw new InvalidOperationException("Failed to deserialize users.", ex);
             }
         }

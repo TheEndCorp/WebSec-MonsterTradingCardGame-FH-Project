@@ -17,7 +17,7 @@ namespace SemesterProjekt1
 
         public Card()
         {
-            Name = string.Empty; // Initialisierung der nicht-nullbaren Eigenschaft
+            Name = string.Empty; 
             Damage = 0;
             Element = ElementType.Normal;
             Type = CardType.Monster;
