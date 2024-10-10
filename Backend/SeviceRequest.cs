@@ -135,7 +135,7 @@ namespace SemesterProjekt1
             {
                 string requestBody = await reader.ReadToEndAsync();
                 var user = DeserializeUser(requestBody);
-                if (user != null)
+                if (user != null && (IsValidInput(user.Username) || IsValidInput(user.Password)))
                 {
                     var existingUser = _userServiceHandler.GetUserByName(user.Username);
                     if (existingUser == null)
@@ -209,6 +209,7 @@ namespace SemesterProjekt1
 
                 if (request.ContentType == "application/json")
                 {
+
                     var user1 = JsonSerializer.Deserialize<User>(requestBody);
                     username = user1.Username;
                     password = user1.Password;
@@ -443,6 +444,28 @@ namespace SemesterProjekt1
         private string SerializeToJson(object obj)
         {
             return JsonSerializer.Serialize(obj);
+        }
+        
+        
+        private bool IsValidInput(string input)
+        {
+            // Überprüfen Sie auf schädliche Zeichen oder Muster
+            string[] blackList = { "'", "\"", "--", ";", "/*", "*/", "xp_" };
+            foreach (var item in blackList)
+            {
+                if (input.Contains(item))
+                {
+                    return false;
+                }
+            }
+
+            // Überprüfen Sie die Länge der Eingabe
+            if (input.Length > 20) // Beispielgrenze, anpassen nach Bedarf
+            {
+                return false;
+            }
+
+            return true;
         }
 
 
