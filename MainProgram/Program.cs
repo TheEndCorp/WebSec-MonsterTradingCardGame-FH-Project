@@ -51,7 +51,7 @@ namespace SemesterProjekt1
 
 
             string localIPAddress = IsAdministrator() ? GetLocalIPAddress() : "localhost";
-            HttpListener listener = new HttpListener();
+            using HttpListener listener = new HttpListener();
             listener.Prefixes.Add($"http://{localIPAddress}:10001/");
 
             listener.Start();

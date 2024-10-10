@@ -11,13 +11,13 @@ namespace SemesterProjekt1
     public class UserServiceHandler
     {
         public List<User> _users;
-        public DatabaseHandler _databaseHandler;
+        public DatabaseHandler2 _databaseHandler;
         private List<User> _lobby;
 
         public UserServiceHandler()
         {
-            _databaseHandler = new DatabaseHandler();
-            _users = _databaseHandler.LoadUser();
+            _databaseHandler = new DatabaseHandler2();
+            _users = _databaseHandler.LoadUsers();
             _lobby = new List<User>();
 
             if (_users.Count == 0)
@@ -49,7 +49,7 @@ namespace SemesterProjekt1
 
         public void AddUser(User user)
         {
-            if (_users.Any(u => u.Username == user.Username))
+            if (_users.Exists(u => u.Username == user.Username))
             {
                 throw new InvalidOperationException("Ein Benutzer mit diesem Benutzernamen existiert bereits.");
             }
@@ -61,8 +61,6 @@ namespace SemesterProjekt1
         {
             return _users.Find(p => p.Username == username);
         }
-
-
 
         public void UpdateUser(int id, User updatedUser)
         {
@@ -90,12 +88,12 @@ namespace SemesterProjekt1
             return _users.Find(u => u.Username == username && u.Password == password);
         }
 
-        public User BuyPacks(int Userid, int amount, string username, string password)
+        public User BuyPacks(int userId, int amount, string username, string password)
         {
-            var user = GetUserById(Userid);
+            var user = GetUserById(userId);
             if (user != null && AuthenticateUser(username, password) != null)
             {
-                user.Inventory.AddCardPack(new CardPack(Userid), amount);
+                user.Inventory.AddCardPack(new CardPack(userId), amount);
                 _databaseHandler.SaveUsers(_users);
             }
             return user;
@@ -103,7 +101,6 @@ namespace SemesterProjekt1
 
         public User OpenCardPack(int userId, string username, string password)
         {
-            Console.WriteLine("Test");
             var user = _users.Find(p => p.Id == userId && p.Username == username && p.Password == password);
             if (user != null && AuthenticateUser(username, password) != null)
             {
@@ -150,13 +147,14 @@ namespace SemesterProjekt1
             response.OutputStream.Write(buffer, 0, buffer.Length);
             response.OutputStream.Close();
         }
+
         public void SaveDeck(int userId, List<Card> deck)
         {
             var user = GetUserById(userId);
             if (user != null)
             {
                 user.Inventory.Deck.Cards = deck;
-                _databaseHandler.SaveUsers(_users); 
+                _databaseHandler.SaveUsers(_users);
             }
             else
             {
@@ -164,34 +162,22 @@ namespace SemesterProjekt1
             }
         }
 
-
-
         public User AddCardToDeck(int userId, string username, string password, int[] cardpos)
         {
-            Console.WriteLine("Test");
             var user = _users.Find(p => p.Id == userId && p.Username == username && p.Password == password);
             if (user != null && AuthenticateUser(username, password) != null)
             {
                 if (user.Inventory.OwnedCards.Count > 0)
                 {
-
-                    var CardsList = user.Inventory.OwnedCards;
-
-                    for (int i = 0; i < cardpos.Count(); i++)
+                    var cardsList = user.Inventory.OwnedCards;
+                    foreach (var pos in cardpos)
                     {
-                        user.Inventory.Deck.AddCard(CardsList[cardpos[i]]);
+                        user.Inventory.Deck.AddCard(cardsList[pos]);
                     }
-                    
                     _databaseHandler.SaveUsers(_users);
                 }
             }
             return user;
         }
-
-
-
-
-
-
     }
 }
