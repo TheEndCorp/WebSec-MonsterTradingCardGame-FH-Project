@@ -32,8 +32,8 @@ namespace SemesterProjekt1
             _users = new List<User>
                 {
                     new User(1, "Ender", "123"),
-                    new User(2, "John Doe", "test"),
-                    new User(3, "Jane Smith", "test"),
+                    new User(2, "John", "test"),
+                    new User(3, "Jane", "test"),
                 };
         }
 
@@ -143,7 +143,7 @@ namespace SemesterProjekt1
             {
                 var player1 = _lobby[0];
                 var player2 = _lobby[1];
-                var fightLogic = new FightLogic(player1.Inventory.Deck.Cards, player2.Inventory.Deck.Cards);
+                var fightLogic = new FightLogic(player1, player2);
                 fightLogic.StartBattle();
                 _lobby.Clear();
             }
@@ -183,6 +183,7 @@ namespace SemesterProjekt1
                     foreach (var pos in cardpos)
                     {
                         user.Inventory.Deck.AddCard(cardsList[pos]);
+                        user.Inventory.OwnedCards[pos].InDeck = true;
                     }
                     _databaseHandler.SaveUsers(_users);
                 }

@@ -9,64 +9,74 @@ namespace SemesterProjekt1
 {
     public class FightLogic : CardTypes
     {
+        private User User1;
+        private User User2;
         private List<Card> player1Deck;
         private List<Card> player2Deck;
         private Random random;
+        public StringBuilder battleLog {get; set;}
 
-        public FightLogic(List<Card> player1Deck, List<Card> player2Deck)
+    public FightLogic(User User1, User User2)
         {
-            this.player1Deck = player1Deck;
-            this.player2Deck = player2Deck;
+            this.User1 = User1;
+            this.User2 = User2;
+            this.player1Deck = User1.Inventory.Deck.Cards;
+            this.player2Deck = User2.Inventory.Deck.Cards;
             this.random = new Random();
+            this.battleLog = new StringBuilder();
         }
 
         public void StartBattle()
         {
             int round = 0;
+            StringBuilder battleLog = new StringBuilder();
+
             while (round < 100 && player1Deck.Count > 0 && player2Deck.Count > 0)
             {
                 Card player1Card = player1Deck[random.Next(player1Deck.Count)];
                 Card player2Card = player2Deck[random.Next(player2Deck.Count)];
 
-                Console.WriteLine($"Runde {round + 1}: {player1Card.Name} vs {player2Card.Name}");
+                battleLog.AppendLine($"Runde {round + 1}: {player1Card.Name} vs {player2Card.Name}");
 
                 int player1Damage = CalculateDamage(player1Card, player2Card);
                 int player2Damage = CalculateDamage(player2Card, player1Card);
 
                 if (player1Damage > player2Damage)
                 {
-                    Console.WriteLine($"{player1Card.Name} gewinnt die Runde!");
+                    battleLog.AppendLine($"{player1Card.Name} gewinnt die Runde!");
                     player1Deck.Add(player2Card);
                     player2Deck.Remove(player2Card);
                 }
                 else if (player2Damage > player1Damage)
                 {
-                    Console.WriteLine($"{player2Card.Name} gewinnt die Runde!");
+                    battleLog.AppendLine($"{player2Card.Name} gewinnt die Runde!");
                     player2Deck.Add(player1Card);
                     player1Deck.Remove(player1Card);
                 }
                 else
                 {
-                    Console.WriteLine("Unentschieden!");
+                    battleLog.AppendLine("Unentschieden!");
                 }
 
                 round++;
             }
 
-            Console.WriteLine("Kampf beendet!");
+            battleLog.AppendLine("Kampf beendet!");
 
             if (player1Deck.Count > player2Deck.Count)
             {
-                Console.WriteLine("Spieler 1 gewinnt den Kampf!");
+                battleLog.AppendLine($"Spieler 1 ({User1.Username}) gewinnt den Kampf!");
             }
             else if (player2Deck.Count > player1Deck.Count)
             {
-                Console.WriteLine("Spieler 2 gewinnt den Kampf!");
+                battleLog.AppendLine($"Spieler 2 ({User2.Username}) gewinnt den Kampf!");
             }
             else
             {
-                Console.WriteLine("Der Kampf endet unentschieden!");
+                battleLog.AppendLine("Der Kampf endet unentschieden!");
             }
+
+            Console.WriteLine(battleLog.ToString());
         }
 
         private int CalculateDamage(Card attacker, Card defender)
