@@ -8,7 +8,7 @@ namespace SemesterProjekt1
 {
     public class UserServiceRequest
     {
-        public UserServiceHandler _userServiceHandler = new UserServiceHandler();
+        public UserServiceHandler _userServiceHandler = new UserServiceHandler(); 
         private HTMLGEN _htmlgen = new HTMLGEN(new UserServiceHandler());
 
         public async Task HandleRequestAsync(HttpListenerContext context)

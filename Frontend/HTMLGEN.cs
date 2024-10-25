@@ -145,22 +145,39 @@ namespace SemesterProjekt1
                 var user = _userServiceHandler.GetUserById(userId); ;
                 if (user != null)
                 {
-                    string lobbyPage = $@"
-                    <!DOCTYPE html>
-                    <html lang='de'>
-                    <head>
-                        <meta charset='UTF-8'>
-                        <title>Lobby</title>
-                    </head>
-                    <body>
-                        <h1>Lobby</h1>
-                        <p>ID: {user.Inventory.UserID}</p>
-                        <form id='joinLobbyForm' method='post' action='/join-lobby'>
-                            <input type='hidden' name='userID' value='{userId}' />
-                            <input type='submit' value='Lobby beitreten'>
-                        </form>
-                    </body>
-                    </html>";
+                    string lobbyPage = @"
+                                        <!DOCTYPE html>
+                                        <html>
+                                        <head>
+                                            <title>Lobby</title>
+                                            <script>
+                                                var socket = new WebSocket('ws://localhost:10001/join-lobby');
+                                                socket.onmessage = function(event) {
+                                                    var log = document.getElementById('log');
+                                                    log.innerHTML += event.data + '<br>';
+                                                };
+socket.onopen = function(event) {
+    console.log(""WebSocket is open now."");
+};
+
+socket.onmessage = function(event) {
+    console.log(""WebSocket message received:"", event);
+};
+
+socket.onclose = function(event) {
+    console.log(""WebSocket is closed now."");
+};
+
+socket.onerror = function(error) {
+    console.log(""WebSocket error:"", error);
+};
+                                            </script>
+                                        </head>
+                                        <body>
+                                            <h1>Lobby</h1>
+                                            <div id='log'></div>
+                                        </body>
+                                        </html>";
 
                     SendResponse(response, lobbyPage, "text/html");
                 }
