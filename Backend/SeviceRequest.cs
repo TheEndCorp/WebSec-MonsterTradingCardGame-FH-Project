@@ -61,7 +61,7 @@ namespace SemesterProjekt1
                     _htmlgen.SendLoginPage(response);
                     break;
                 case "/lobby":
-                    _htmlgen.SendLobbyPage(request, response);
+                    //_htmlgen.SendLobbyPage(request, response);
                     break;
                 default:
                     response.StatusCode = (int)HttpStatusCode.NotFound;
@@ -91,9 +91,6 @@ namespace SemesterProjekt1
                     break;
                 case "/inventory":
                     await HandleBuyPacksAsync(request, response);
-                    break;
-                case "/join-lobby":
-                    await HandleJoinLobbyAsync(request, response);
                     break;
                 case "/add-card-to-deck":
                     await HandleAddCardToDeckAsync(request, response);
@@ -338,45 +335,7 @@ namespace SemesterProjekt1
             response.OutputStream.Close();
         }
 
-        private async Task HandleJoinLobbyAsync(HttpListenerRequest request, HttpListenerResponse response)
-        {
-            using (var reader = new StreamReader(request.InputStream, request.ContentEncoding))
-            {
-                string requestBody = await reader.ReadToEndAsync();
-                var formData = System.Web.HttpUtility.ParseQueryString(requestBody);
-
-                var userDataCookie = request.Cookies["userData"]?.Value;
-                if (userDataCookie != null)
-                {
-                    var userData = System.Web.HttpUtility.ParseQueryString(userDataCookie);
-                    string username = userData["username"];
-                    string password = userData["password"];
-                    string userIdString = userData["userid"];
-                    int userId = int.Parse(userIdString);
-
-                    var user = _userServiceHandler.AuthenticateUser(username, password);
-                    if (user != null)
-                    {
-                        _userServiceHandler.AddUserToLobby(user);
-                        SendResponse(response, "User added to lobby", "text/plain");
-                    }
-                    else
-                    {
-                        response.StatusCode = (int)HttpStatusCode.Unauthorized;
-                        SendResponse(response, "Invalid username or password.", "text/plain");
-                    }
-                }
-                else
-                {
-                    response.StatusCode = (int)HttpStatusCode.BadRequest;
-                    SendResponse(response, "Invalid user ID.", "text/plain");
-                }
-            }
-
-            response.OutputStream.Close();
-        }
-
-
+        
 
         private async Task HandleAddCardToDeckAsync(HttpListenerRequest request, HttpListenerResponse response)
         {

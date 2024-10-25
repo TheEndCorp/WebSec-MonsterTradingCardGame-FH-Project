@@ -125,29 +125,7 @@ namespace SemesterProjekt1
             return user;
         }
 
-        public void AddUserToLobby(User user)
-        {
-            if (!_lobby.Contains(user))
-            {
-                _lobby.Add(user);
-                if (_lobby.Count == 2)
-                {
-                    StartFight();
-                }
-            }
-        }
 
-        private void StartFight()
-        {
-            if (_lobby.Count == 2)
-            {
-                var player1 = _lobby[0];
-                var player2 = _lobby[1];
-                var fightLogic = new FightLogic(player1, player2);
-                fightLogic.StartBattle();
-                _lobby.Clear();
-            }
-        }
 
         private void SendResponse(HttpListenerResponse response, string content, string contentType)
         {

@@ -131,68 +131,7 @@ namespace SemesterProjekt1
             return html;
         }
 
-        public void SendLobbyPage(HttpListenerRequest request, HttpListenerResponse response)
-        {
-            var userDataCookie = request.Cookies["userData"]?.Value;
-            if (userDataCookie != null)
-            {
-                var userData = System.Web.HttpUtility.ParseQueryString(userDataCookie);
-                string username = userData["username"];
-                string password = userData["password"];
-                string userIdString = userData["userid"];
-                int userId = int.Parse(userIdString);
 
-                var user = _userServiceHandler.GetUserById(userId); ;
-                if (user != null)
-                {
-                    string lobbyPage = @"
-                                        <!DOCTYPE html>
-                                        <html>
-                                        <head>
-                                            <title>Lobby</title>
-                                            <script>
-                                                var socket = new WebSocket('ws://localhost:10001/join-lobby');
-                                                socket.onmessage = function(event) {
-                                                    var log = document.getElementById('log');
-                                                    log.innerHTML += event.data + '<br>';
-                                                };
-socket.onopen = function(event) {
-    console.log(""WebSocket is open now."");
-};
-
-socket.onmessage = function(event) {
-    console.log(""WebSocket message received:"", event);
-};
-
-socket.onclose = function(event) {
-    console.log(""WebSocket is closed now."");
-};
-
-socket.onerror = function(error) {
-    console.log(""WebSocket error:"", error);
-};
-                                            </script>
-                                        </head>
-                                        <body>
-                                            <h1>Lobby</h1>
-                                            <div id='log'></div>
-                                        </body>
-                                        </html>";
-
-                    SendResponse(response, lobbyPage, "text/html");
-                }
-                else
-                {
-                    response.StatusCode = (int)HttpStatusCode.Unauthorized;
-                    SendResponse(response, "Unauthorized access. Please log in.", "text/plain");
-                }
-            }
-            else
-            {
-                response.StatusCode = (int)HttpStatusCode.Unauthorized;
-                SendResponse(response, "Unauthorized access. Please log in.", "text/plain");
-            }
-        }
 
         public void SendResponse(HttpListenerResponse response, string content, string contentType)
         {

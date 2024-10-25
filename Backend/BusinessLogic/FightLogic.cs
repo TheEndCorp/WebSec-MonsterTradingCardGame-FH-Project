@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net.WebSockets;
 using System.Text;
 using System.Threading.Tasks;
 using static SemesterProjekt1.CardTypes;
@@ -26,7 +27,7 @@ namespace SemesterProjekt1
             this.battleLog = new StringBuilder();
         }
 
-        public void StartBattle()
+        public async Task StartBattleAsync(WebSocket player1Socket, WebSocket player2Socket)
         {
             int round = 0;
             StringBuilder battleLog = new StringBuilder();
@@ -59,6 +60,8 @@ namespace SemesterProjekt1
                 }
 
                 round++;
+                await SendBattleLogAsync(player1Socket, player2Socket, battleLog.ToString());
+                battleLog.Clear();
             }
 
             battleLog.AppendLine("Kampf beendet!");
@@ -76,7 +79,23 @@ namespace SemesterProjekt1
                 battleLog.AppendLine("Der Kampf endet unentschieden!");
             }
 
-            Console.WriteLine(battleLog.ToString());
+            await SendBattleLogAsync(player1Socket, player2Socket, battleLog.ToString());
+        }
+
+        private async Task SendBattleLogAsync(WebSocket player1Socket, WebSocket player2Socket, string log)
+        {
+            var buffer = Encoding.UTF8.GetBytes(log);
+            var segment = new ArraySegment<byte>(buffer);
+
+            if (player1Socket.State == WebSocketState.Open)
+            {
+                await player1Socket.SendAsync(segment, WebSocketMessageType.Text, true, CancellationToken.None);
+            }
+
+            if (player2Socket.State == WebSocketState.Open)
+            {
+                await player2Socket.SendAsync(segment, WebSocketMessageType.Text, true, CancellationToken.None);
+            }
         }
 
         private int CalculateDamage(Card attacker, Card defender)

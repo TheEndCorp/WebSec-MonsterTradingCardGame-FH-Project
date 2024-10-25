@@ -42,6 +42,7 @@ namespace SemesterProjekt1
                 try
                 {
                     HttpListenerContext context = await listener.GetContextAsync();
+                    HttpListenerResponse response = context.Response;
 
                     Console.WriteLine($"Received request for: {context.Request.Url}");
 
@@ -55,6 +56,12 @@ namespace SemesterProjekt1
                     {
                         Console.WriteLine("HTTP request for login page.");
                         HandleLoginRequest(context);
+                    }
+                    else if (context.Request.Url?.AbsolutePath == "/login3")
+                    {
+                        Console.WriteLine("HTTP request for login page.");
+                        HandleLoginRequest2(context);
+
                     }
                     else
                     {
@@ -168,5 +175,163 @@ namespace SemesterProjekt1
             }
             throw new Exception("Keine IPv4-Adresse im lokalen Netzwerk gefunden.");
         }
+
+
+
+        /*
+                private static void LOBBYFIGHT(SocketRequester socketRequester,HttpListenerContext context)
+                {
+                    // Cookie aus der Anfrage lesen
+                    var userDataCookie = context.Request.Cookies["userData"]?.Value;
+                    if (userDataCookie == null)
+                    {
+                        // Wenn kein Cookie vorhanden ist, eine Fehlermeldung senden
+                        context.Response.StatusCode = (int)HttpStatusCode.Unauthorized;
+                        byte[] errorResponse = Encoding.UTF8.GetBytes("Unauthorized: No UserId cookie found.");
+                        context.Response.OutputStream.Write(errorResponse, 0, errorResponse.Length);
+                        context.Response.OutputStream.Close();
+                        return;
+                    }
+
+
+                    var userData = System.Web.HttpUtility.ParseQueryString(userDataCookie);
+                    string username = userData["username"];
+                    string password = userData["password"];
+                    string userIdString = userData["userid"];
+                    int userId = int.Parse(userIdString);
+
+                    var user = socketRequester._userServiceHandler.AuthenticateUser(username, password);
+
+
+
+                    // Benutzer-ID aus dem Cookie extrahieren
+
+
+                    // Hier kannst du die Benutzer-ID verwenden, um den Benutzer zu identifizieren
+                    Console.WriteLine($"Benutzer-ID aus Cookie: {userId}");
+
+                    string responseString = @"
+                <!DOCTYPE html>
+                <html lang='de'>
+                <head>
+                    <meta charset='UTF-8'>
+                    <title>Fight Lobby</title>
+                </head>
+                <body>
+                    <h1>Fight Lobby</h1>
+                    <div id='log'></div>
+                    <button id='rematchButton' style='display:none;'>Rematch</button>
+
+                    <script>
+                        const logDiv = document.getElementById('log');
+                        const rematchButton = document.getElementById('rematchButton');
+                        const socket = new WebSocket('ws://' + window.location.host + '/lobby3');
+
+                        socket.onmessage = function(event) {
+                            const message = event.data;
+                            logDiv.innerHTML += `<p>${message}</p>`;
+                            if (message.includes('Kampf beendet!')) {
+                                rematchButton.style.display = 'block';
+                            }
+                        };
+
+                        rematchButton.onclick = function() {
+                            socket.send('rematch');
+                            rematchButton.style.display = 'none';
+                            logDiv.innerHTML = '';
+                        };
+                    </script>
+                </body>
+                </html>
+                ";
+                    byte[] responseBuffer = Encoding.UTF8.GetBytes(responseString);
+                    context.Response.ContentLength64 = responseBuffer.Length;
+                    context.Response.ContentType = "text/html";
+                    context.Response.OutputStream.Write(responseBuffer, 0, responseBuffer.Length);
+                    context.Response.OutputStream.Close();
+                }
+
+                */
+
+        private static void LOBBYFIGHT(SocketRequester socketRequester, HttpListenerContext context)
+        {
+            // Existing code to retrieve user data
+            var userDataCookie = context.Request.Cookies["userData"]?.Value;
+            var userData = System.Web.HttpUtility.ParseQueryString(userDataCookie);
+            string username = userData["username"];
+            string password = userData["password"];
+            string userIdString = userData["userid"];
+            int userId = int.Parse(userIdString);
+
+            // Authenticate the user
+            var user = socketRequester._userServiceHandler.AuthenticateUser(username, password);
+            if (user == null)
+            {
+                // Handle unauthorized
+                context.Response.StatusCode = (int)HttpStatusCode.Unauthorized;
+                return;
+            }
+
+            // Connect to the fight WebSocket with user data
+            _ = socketRequester.HandleWebSocketConnectionFight(context,user);
+        }
+
+
+        private static void HandleLoginRequest2(HttpListenerContext context)
+        {
+            string responseString = @"
+    <!DOCTYPE html>
+    <html lang='en'>
+        <head>
+            <meta charset='UTF-8'>
+            <title>Fight Lobby</title>
+            <script>
+                let socket;
+                function connect() {
+                    socket = new WebSocket('ws://' + window.location.host + '/lobby3');
+                    socket.onopen = function() {
+                        console.log('Connected to WebSocket for fight.');
+                        document.getElementById('log').innerHTML = '<p>Waiting for an opponent...</p>';
+                    };
+                    socket.onmessage = function(event) {
+                        const logDiv = document.getElementById('log');
+                        const message = event.data;
+                        logDiv.innerHTML += `<p>${message}</p>`;
+                        if (message.includes('Fight over')) {
+                            document.getElementById('rematchButton').style.display = 'block';
+                        }
+                    };
+                    socket.onclose = function() {
+                        console.log('Disconnected from WebSocket.');
+                    };
+                }
+
+                function rematch() {
+                    socket.send('rematch');
+                    document.getElementById('log').innerHTML = '';
+                    document.getElementById('rematchButton').style.display = 'none';
+                }
+            </script>
+        </head>
+        <body onload='connect()'>
+            <h1>Fight Lobby</h1>
+            <div id='log'></div>
+            <button id='rematchButton' style='display:none;' onclick='rematch()'>Rematch</button>
+        </body>
+    </html>";
+
+            byte[] responseBuffer = Encoding.UTF8.GetBytes(responseString);
+            context.Response.ContentLength64 = responseBuffer.Length;
+            context.Response.ContentType = "text/html";
+            context.Response.OutputStream.Write(responseBuffer, 0, responseBuffer.Length);
+            context.Response.OutputStream.Close();
+        }
+
+
+
+
+
+
+
     }
 }
