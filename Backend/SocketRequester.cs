@@ -9,6 +9,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.IO;
+using System.Net.Sockets;
 
 namespace SemesterProjekt1
 {
@@ -37,30 +38,63 @@ namespace SemesterProjekt1
             await Task.WhenAll(tasks);
         }
 
-        public static async Task HandleWebSocketConnection(HttpListenerContext context)
+        public static async Task HandleWebSocketConnection(TcpClient client)
         {
             try
             {
-                var webSocketContext = await context.AcceptWebSocketAsync(null);
-                var webSocket = webSocketContext.WebSocket;
+                var stream = client.GetStream();
+                using (var reader = new StreamReader(stream, Encoding.UTF8, leaveOpen: true))
+                using (var writer = new StreamWriter(stream, Encoding.UTF8, leaveOpen: true))
+                {
+                    // 1. Read handshake request
+                    var requestLine = await reader.ReadLineAsync();
+                    var headers = new Dictionary<string, string>();
 
-                if (ConnectedSockets.TryAdd(webSocket, null))
-                {
-                    Console.WriteLine($"User connected to lobby. Total users: {ConnectedSockets.Count}");
-                    await ReceiveMessages(webSocket);
-                }
-                else
-                {
-                    Console.WriteLine("Failed to add WebSocket to the dictionary.");
+                    while (!string.IsNullOrEmpty(requestLine))
+                    {
+                        var parts = requestLine.Split(':');
+                        if (parts.Length == 2)
+                        {
+                            headers[parts[0].Trim()] = parts[1].Trim();
+                        }
+                        requestLine = await reader.ReadLineAsync();
+                    }
+
+                    if (headers.TryGetValue("Sec-WebSocket-Key", out var webSocketKey))
+                    {
+                        // 2. Perform WebSocket handshake
+                        string acceptKey = Convert.ToBase64String(
+                            System.Security.Cryptography.SHA1.Create()
+                                .ComputeHash(Encoding.UTF8.GetBytes(webSocketKey + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"))
+                        );
+
+                        // Write response
+                        await writer.WriteAsync(
+                            "HTTP/1.1 101 Switching Protocols\r\n" +
+                            "Connection: Upgrade\r\n" +
+                            "Upgrade: websocket\r\n" +
+                            $"Sec-WebSocket-Accept: {acceptKey}\r\n" +
+                            "\r\n"
+                        );
+                        await writer.FlushAsync();
+
+                        // 3. Create WebSocket and begin handling messages
+                        var webSocket = WebSocket.CreateFromStream(stream, isServer: true, subProtocol: null, TimeSpan.FromSeconds(30));
+                        if (ConnectedSockets.TryAdd(webSocket, null))
+                        {
+                            Console.WriteLine($"User connected to lobby. Total users: {ConnectedSockets.Count}");
+                            await ReceiveMessages(webSocket);
+                        }
+                    }
                 }
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"Error handling WebSocket connection: {ex.Message}");
-                context.Response.StatusCode = 500;
-                context.Response.Close();
+                client.Close();
             }
         }
+
 
         public static async Task ReceiveMessages(WebSocket webSocket)
         {
@@ -187,55 +221,66 @@ namespace SemesterProjekt1
             await BroadcastMessage("Log cleared for rematch.");
         }
 
-        public async Task HandleRequestAsync(HttpListenerContext context)
+        public async Task HandleRequestAsync(string path, TcpClient client)
         {
             try
             {
-                if (context.Request.IsWebSocketRequest && context.Request.Url?.AbsolutePath == "/lobby2")
+                var stream = client.GetStream();
+                var reader = new StreamReader(stream);
+                var requestLine = await reader.ReadLineAsync();
+                var requestParts = requestLine.Split(' ');
+
+                if (requestParts.Length < 3)
+                {
+                    client.Close();
+                    return;
+                }
+
+                var method = requestParts[0];
+                var requestPath = requestParts[1];
+
+                if (method == "GET" && requestPath == "/lobby2")
                 {
                     Console.WriteLine("Lobby 2 WebSocket request detected.");
-                    _ = HandleWebSocketConnection(context);
+                    _ = HandleWebSocketConnection(client);
                 }
-                else if (context.Request.IsWebSocketRequest && context.Request.Url?.AbsolutePath == "/lobby3")
+                else if (method == "GET" && requestPath == "/lobby3")
                 {
                     Console.WriteLine("Lobby 3 WebSocket request detected.");
-                    await HandleLobbyFight(context);
+                    await HandleLobbyFight(client);
                 }
                 else
                 {
-                    context.Response.StatusCode = (int)HttpStatusCode.NotFound;
-                    context.Response.Close();
+                    SendResponse(client, "404 Not Found", "text/plain");
                 }
             }
             catch (Exception ex)
             {
-                context.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
-                SendResponse(context.Response, $"Error: {ex.Message}\n{ex.StackTrace}", "text/plain");
+                SendResponse(client, $"Error: {ex.Message}\n{ex.StackTrace}", "text/plain");
             }
         }
 
-        public void SendResponse(HttpListenerResponse response, string content, string contentType)
+        public void SendResponse(TcpClient client, string content, string contentType)
         {
-            byte[] buffer = Encoding.UTF8.GetBytes(content);
-            response.ContentLength64 = buffer.Length;
-            response.ContentType = contentType;
-            response.OutputStream.Write(buffer, 0, buffer.Length);
-            response.OutputStream.Close();
+            var response = $"HTTP/1.1 200 OK\r\nContent-Type: {contentType}\r\nContent-Length: {content.Length}\r\n\r\n{content}";
+            var buffer = Encoding.UTF8.GetBytes(response);
+            client.GetStream().Write(buffer, 0, buffer.Length);
+            client.Close();
         }
 
-        public async Task HandleLobbyFight(HttpListenerContext context)
+        public async Task HandleLobbyFight(TcpClient client)
         {
-            var user = AuthenticateUserFromCookie(context);
+            var user = AuthenticateUserFromCookie(client);
             if (user == null)
             {
-                context.Response.StatusCode = (int)HttpStatusCode.Unauthorized;
+                SendResponse(client, "401 Unauthorized", "text/plain");
                 return;
             }
 
-            await HandleWebSocketFightConnection(context, user);
+            await HandleWebSocketFightConnection(client, user);
         }
 
-        private async Task HandleWebSocketFightConnection(HttpListenerContext context, User user)
+        private async Task HandleWebSocketFightConnection(TcpClient client, User user)
         {
             if (LobbySockets.Count >= 2)
             {
@@ -250,55 +295,119 @@ namespace SemesterProjekt1
                 {
                     LobbySockets.TryRemove(socketKey, out _);
                 }
-                context.Response.StatusCode = (int)HttpStatusCode.Forbidden;
-                context.Response.Close();
-                Console.Write(LobbySockets.Count);
+
+                SendResponse(client, "403 Forbidden", "text/plain");
+                Console.WriteLine("Lobby is full, connection denied.");
                 return;
             }
 
-           
-
             try
             {
-                var webSocketContext = await context.AcceptWebSocketAsync(null);
-                var webSocket = webSocketContext.WebSocket;
-
-                if (LobbySockets.TryAdd(context.Request.RemoteEndPoint.ToString(), webSocket))
+                var stream = client.GetStream();
+                using (var reader = new StreamReader(stream, Encoding.UTF8, leaveOpen: true))
+                using (var writer = new StreamWriter(stream, Encoding.UTF8, leaveOpen: true))
                 {
-                    LobbyUserSockets.TryAdd(user.Id, webSocket);
-                    Console.WriteLine($"User connected to fight lobby. Total users: {LobbySockets.Count}");
+                    // 1. Read and process the WebSocket handshake request
+                    var requestLine = await reader.ReadLineAsync();
+                    var headers = new Dictionary<string, string>();
 
-                    if (LobbySockets.Count == 2)
+                    while (!string.IsNullOrEmpty(requestLine))
                     {
-                        var users = LobbyUserSockets.Keys.ToList();
-                        var sockets = LobbySockets.Values.ToList();
+                        var parts = requestLine.Split(':');
+                        if (parts.Length == 2)
+                        {
+                            headers[parts[0].Trim()] = parts[1].Trim();
+                        }
+                        requestLine = await reader.ReadLineAsync();
+                    }
 
-                        User user1 = _userServiceHandler.GetUserById(users[0]);
-                        User user2 = _userServiceHandler.GetUserById(users[1]);
-                        var fightLogic = new FightLogic(user1, user2);
-                        await fightLogic.StartBattleAsync(sockets[0], sockets[1]);
-                    }
-                    else
+                    if (headers.TryGetValue("Sec-WebSocket-Key", out var webSocketKey))
                     {
-                        await ReceiveRematchMessages(webSocket);
+                        // 2. Respond with WebSocket handshake
+                        string acceptKey = Convert.ToBase64String(
+                            System.Security.Cryptography.SHA1.Create()
+                                .ComputeHash(Encoding.UTF8.GetBytes(webSocketKey + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"))
+                        );
+
+                        await writer.WriteAsync(
+                            "HTTP/1.1 101 Switching Protocols\r\n" +
+                            "Connection: Upgrade\r\n" +
+                            "Upgrade: websocket\r\n" +
+                            $"Sec-WebSocket-Accept: {acceptKey}\r\n" +
+                            "\r\n"
+                        );
+                        await writer.FlushAsync();
+
+                        // 3. Create WebSocket from the TCP stream
+                        var webSocket = WebSocket.CreateFromStream(stream, isServer: true, subProtocol: null, TimeSpan.FromSeconds(30));
+
+                        // Add WebSocket to lobby dictionaries
+                        if (LobbySockets.TryAdd(client.Client.RemoteEndPoint.ToString(), webSocket))
+                        {
+                            LobbyUserSockets.TryAdd(user.Id, webSocket);
+                            Console.WriteLine($"User connected to fight lobby. Total users: {LobbySockets.Count}");
+
+                            if (LobbySockets.Count == 2)
+                            {
+                                var users = LobbyUserSockets.Keys.ToList();
+                                var sockets = LobbySockets.Values.ToList();
+
+                                // Start fight between two users
+                                User user1 = _userServiceHandler.GetUserById(users[0]);
+                                User user2 = _userServiceHandler.GetUserById(users[1]);
+                                var fightLogic = new FightLogic(user1, user2);
+                                await fightLogic.StartBattleAsync(sockets[0], sockets[1]);
+                            }
+                            else
+                            {
+                                // Wait for rematch messages if only one user in the lobby
+                                await ReceiveRematchMessages(webSocket);
+                            }
+                        }
+                        else
+                        {
+                            Console.WriteLine("Failed to add WebSocket to lobby.");
+                        }
                     }
-                }
-                else
-                {
-                    Console.WriteLine("Failed to add WebSocket to lobby.");
                 }
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"Error handling WebSocket connection for fight lobby: {ex.Message}");
-                context.Response.StatusCode = 500;
-                context.Response.Close();
+                client.Close();
             }
         }
 
-        private User AuthenticateUserFromCookie(HttpListenerContext context)
+
+        private User AuthenticateUserFromCookie(TcpClient client)
         {
-            var userDataCookie = context.Request.Cookies["userData"]?.Value;
+            var stream = client.GetStream();
+            var reader = new StreamReader(stream);
+            var requestLine = reader.ReadLine();
+            var headers = new Dictionary<string, string>();
+
+            string line;
+            while (!string.IsNullOrEmpty(line = reader.ReadLine()))
+            {
+                var parts = line.Split(':');
+                if (parts.Length == 2)
+                {
+                    headers[parts[0].Trim()] = parts[1].Trim();
+                }
+            }
+
+            if (!headers.TryGetValue("Cookie", out var cookieHeader))
+            {
+                return null;
+            }
+
+            var cookies = cookieHeader.Split(';');
+            var userDataCookie = cookies.FirstOrDefault(c => c.Trim().StartsWith("userData="))?.Substring("userData=".Length);
+            if (userDataCookie == null)
+            {
+                return null;
+            }
+
             var userData = System.Web.HttpUtility.ParseQueryString(userDataCookie);
             string username = userData["username"];
             string password = userData["password"];

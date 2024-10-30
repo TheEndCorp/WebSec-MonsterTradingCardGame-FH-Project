@@ -3,18 +3,17 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
-using System.Net.WebSockets;
 using System.Security.Principal;
 using System.Text;
-using System.Threading;
 using System.Threading.Tasks;
 using System.Collections.Generic;
+using System.Net.WebSockets;
 
 namespace SemesterProjekt1
 {
     class Program
     {
-        private static HttpListener listener;
+        private static TcpListener listener;
         private static ConcurrentDictionary<WebSocket, string?> _sockets = new ConcurrentDictionary<WebSocket, string?>();
 
         static async Task Main()
@@ -24,54 +23,26 @@ namespace SemesterProjekt1
                 Console.WriteLine("Die Anwendung wird nicht im Administratormodus ausgeführt. Verwende 'localhost' als lokale IP-Adresse.");
             }
 
-            string localIPAddress = IsAdministrator() ? GetLocalIPAddress() : "localhost";
-            listener = new HttpListener();
-            listener.Prefixes.Add($"http://{localIPAddress}:10000/");
+            string localIPAddress = IsAdministrator() ? GetLocalIPAddress() : "127.0.0.1";
+            listener = new TcpListener(IPAddress.Parse(localIPAddress), 10000);
             listener.Start();
 
             Console.WriteLine($"Server gestartet auf http://{localIPAddress}:10000/");
             PrintListeningAddresses();
 
-            Console.WriteLine("WebSocket server started on ws://localhost:10000/lobby");
             UserServiceRequest requester = new UserServiceRequest();
             SocketRequester socketRequester = new SocketRequester(requester._userServiceHandler);
-
 
             while (true)
             {
                 try
                 {
-                    HttpListenerContext context = await listener.GetContextAsync();
-                    HttpListenerResponse response = context.Response;
-
-                    Console.WriteLine($"Received request for: {context.Request.Url}");
-
-                    // Handle WebSocket requests asynchronously
-                    if (context.Request.IsWebSocketRequest)
-                    {
-                        Console.WriteLine("WebSocket request detected.");
-                        _ = Task.Run(() => HandleSocketRequestAsync(socketRequester, context));
-                    }
-                    else if (context.Request.Url?.AbsolutePath == "/login2")
-                    {
-                        Console.WriteLine("HTTP request for login page.");
-                        HandleLoginRequest(context);
-                    }
-                    else if (context.Request.Url?.AbsolutePath == "/login3")
-                    {
-                        Console.WriteLine("HTTP request for login page.");
-                        HandleLoginRequest2(context);
-
-                    }
-                    else
-                    {
-                        Console.WriteLine("HTTP request received.");
-                        _ = Task.Run(() => HandleRequestAsync(requester, context));
-                    }
+                    TcpClient client = await listener.AcceptTcpClientAsync();
+                    _ = Task.Run(() => HandleClientAsync(client, requester, socketRequester));
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Error accepting context: {ex.Message}");
+                    Console.WriteLine($"Error accepting client: {ex.Message}");
                 }
             }
         }
@@ -97,16 +68,105 @@ namespace SemesterProjekt1
                 }
             }
         }
-        private static async Task HandleRequestAsync(UserServiceRequest requester, HttpListenerContext context)
+
+        private static async Task HandleClientAsync(TcpClient client, UserServiceRequest requester, SocketRequester socketRequester)
         {
-            await requester.HandleRequestAsync(context);
-            await Task.Run(() => requester._userServiceHandler._databaseHandler.SaveUsers(requester._userServiceHandler._users));
-            Console.WriteLine("Action");
+            try
+            {
+                using (var networkStream = client.GetStream())
+                {
+                    // Check if the stream is usable
+                    if (networkStream.CanRead && networkStream.CanWrite)
+                    {
+                        byte[] buffer = new byte[4096];
+                        int bytesRead = await networkStream.ReadAsync(buffer, 0, buffer.Length);
+                        string requestText = Encoding.UTF8.GetString(buffer, 0, bytesRead);
+                        Console.BackgroundColor = ConsoleColor.DarkGreen;
+                        Console.WriteLine($"Received request:\n{requestText}");
+                        Console.ResetColor();   
+                        // Parse HTTP request
+                        string[] requestLines = requestText.Split(new[] { "\r\n" }, StringSplitOptions.None);
+                        string requestLine = requestLines[0];
+                        string[] requestParts = requestLine.Split(' ');
+                        if (requestParts.Length < 2)
+                        {
+                            return;
+                        }
+
+                        string method = requestParts[0];
+                        string path = requestParts[1];
+
+                        // Handle WebSocket upgrade or HTTP request based on path
+                        if (requestText.Contains("Upgrade: websocket"))
+                        {
+                            Console.WriteLine("WebSocket request detected.");
+                            await HandleSocketRequestAsync(socketRequester, client, path);
+                        }
+                        else if (path == "/login2")
+                        {
+                            Console.WriteLine("HTTP request for login page.");
+                            await SendHttpResponseAsync(networkStream, GenerateLoginPageHtml());
+                        }
+                        else if (path == "/login3")
+                        {
+                            Console.WriteLine("HTTP request for fight lobby.");
+                            await SendHttpResponseAsync(networkStream, GenerateFightLobbyHtml());
+                        }
+                        else
+                        {
+                            Console.WriteLine("Generic HTTP request received.");
+                            await HandleRequestAsync(requester, client, method, path);
+                        }
+                    }
+                    else
+                    {
+                        Console.WriteLine("NetworkStream is not readable or writable.");
+                    }
+                }
+            }
+            catch (IOException ioEx)
+            {
+                Console.WriteLine($"IO Error handling client: {ioEx.Message}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error handling client: {ex.Message}");
+            }
+
         }
 
-        private static async Task HandleSocketRequestAsync(SocketRequester socketRequester, HttpListenerContext context)
+
+
+
+
+
+        private static async Task HandleRequestAsync(UserServiceRequest requester, TcpClient client, string method, string path)
         {
-            await socketRequester.HandleRequestAsync(context);
+            try
+            {
+
+                var networkStream = client.GetStream();
+                if (networkStream.CanRead && networkStream.CanWrite)
+                {
+
+
+
+                    await requester.HandleRequestAsync(client, method, path);
+                    await Task.Run(() => requester._userServiceHandler._databaseHandler.SaveUsers(requester._userServiceHandler._users));
+                    Console.WriteLine("Action");
+                }
+            
+            else Console.WriteLine("PAIN");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error handling request: {ex.Message}");
+            }
+        }
+
+        private static async Task HandleSocketRequestAsync(SocketRequester socketRequester, TcpClient client, string path)
+        {
+            await socketRequester.HandleRequestAsync(path,client);
             await Task.Run(() => socketRequester._userServiceHandler._databaseHandler.SaveUsers(socketRequester._userServiceHandler._users));
             Console.WriteLine("Action");
         }
@@ -114,9 +174,21 @@ namespace SemesterProjekt1
 
 
 
-        private static void HandleLoginRequest(HttpListenerContext context)
+
+
+
+
+
+        private static async Task SendHttpResponseAsync(NetworkStream networkStream, string content, string contentType = "text/html")
         {
-            string responseString = @"
+            string response = $"HTTP/1.1 200 OK\r\nContent-Type: {contentType}\r\nContent-Length: {Encoding.UTF8.GetByteCount(content)}\r\n\r\n{content}";
+            byte[] responseBytes = Encoding.UTF8.GetBytes(response);
+            await networkStream.WriteAsync(responseBytes, 0, responseBytes.Length);
+        }
+
+        private static string GenerateLoginPageHtml()
+        {
+            return @"
                 <html>
                     <head>
                         <title>WebSocket Lobby</title>
@@ -155,57 +227,11 @@ namespace SemesterProjekt1
                         <button onclick='sendMessage()'>Send</button>
                     </body>
                 </html>";
-
-            byte[] responseBuffer = Encoding.UTF8.GetBytes(responseString);
-            context.Response.ContentLength64 = responseBuffer.Length;
-            context.Response.ContentType = "text/html";
-            context.Response.OutputStream.Write(responseBuffer, 0, responseBuffer.Length);
-            context.Response.OutputStream.Close();
         }
 
-        private static string GetLocalIPAddress()
+        private static string GenerateFightLobbyHtml()
         {
-            var host = Dns.GetHostEntry(Dns.GetHostName());
-            foreach (var ip in host.AddressList)
-            {
-                if (ip.AddressFamily == AddressFamily.InterNetwork)
-                {
-                    return ip.ToString();
-                }
-            }
-            throw new Exception("Keine IPv4-Adresse im lokalen Netzwerk gefunden.");
-        }
-
-
-        /*
-
-        private static void LOBBYFIGHT(SocketRequester socketRequester, HttpListenerContext context)
-        {
-            // Existing code to retrieve user data
-            var userDataCookie = context.Request.Cookies["userData"]?.Value;
-            var userData = System.Web.HttpUtility.ParseQueryString(userDataCookie);
-            string username = userData["username"];
-            string password = userData["password"];
-            string userIdString = userData["userid"];
-            int userId = int.Parse(userIdString);
-
-            // Authenticate the user
-            var user = socketRequester._userServiceHandler.AuthenticateUser(username, password);
-            if (user == null)
-            {
-                // Handle unauthorized
-                context.Response.StatusCode = (int)HttpStatusCode.Unauthorized;
-                return;
-            }
-
-            // Connect to the fight WebSocket with user data
-            _ = socketRequester.HandleWebSocketConnectionFight(context,user);
-        }
-        */
-
-        private static void HandleLoginRequest2(HttpListenerContext context)
-        {
-            string responseString = @"
+            return @"
             <!DOCTYPE html>
             <html lang='en'>
                 <head>
@@ -224,25 +250,22 @@ namespace SemesterProjekt1
                             socket.onmessage = function(event) {
                                 const logDiv = document.getElementById('log');
                                 const message = event.data;
-                                console.log('Received message:', message); // Debugging log
                                 logDiv.innerHTML += `<p>${message}</p>`;
                                 if (message.includes('Kampf beendet!')) {
-                                    console.log('Fight over message received'); // Debugging log
                                     document.getElementById('rematchButton').style.display = 'block';
                                     rematchTimeout = setTimeout(() => {
                                         document.getElementById('rematchButton').style.display = 'none';
                                         socket.close();
-                                    }, 20000); // Hide the button and close the socket after 20 seconds
+                                    }, 20000);
                                 }
                             };
                             socket.onclose = function() {
-                                console.log('Disconnected from WebSocket.');
                                 window.location.href = '/'; // Redirect to home page
                             };
                         }
 
                         function rematch() {
-                            clearTimeout(rematchTimeout); // Clear the timeout if the button is pressed
+                            clearTimeout(rematchTimeout);
                             socket.send('rematch');
                             document.getElementById('log').innerHTML = '';
                             document.getElementById('rematchButton').style.display = 'none';
@@ -255,19 +278,19 @@ namespace SemesterProjekt1
                     <button id='rematchButton' style='display:none;' onclick='rematch()'>Rematch</button>
                 </body>
             </html>";
-
-            byte[] responseBuffer = Encoding.UTF8.GetBytes(responseString);
-            context.Response.ContentLength64 = responseBuffer.Length;
-            context.Response.ContentType = "text/html";
-            context.Response.OutputStream.Write(responseBuffer, 0, responseBuffer.Length);
-            context.Response.OutputStream.Close();
         }
 
-
-
-
-
-
-
+        private static string GetLocalIPAddress()
+        {
+            var host = Dns.GetHostEntry(Dns.GetHostName());
+            foreach (var ip in host.AddressList)
+            {
+                if (ip.AddressFamily == AddressFamily.InterNetwork)
+                {
+                    return ip.ToString();
+                }
+            }
+            throw new Exception("Keine IPv4-Adresse im lokalen Netzwerk gefunden.");
+        }
     }
 }
