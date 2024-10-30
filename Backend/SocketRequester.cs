@@ -4,47 +4,38 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Net.WebSockets;
+using System.Runtime.CompilerServices;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
+using System.IO;
 
 namespace SemesterProjekt1
 {
     public class SocketRequester
     {
         public UserServiceHandler _userServiceHandler { get; set; }
-        private static ConcurrentDictionary<WebSocket, string?> _sockets = new ConcurrentDictionary<WebSocket, string?>();
-        private static ConcurrentDictionary<string, WebSocket> _lobbySockets = new ConcurrentDictionary<string, WebSocket>();
-        private static ConcurrentDictionary<int, WebSocket> _lobbySocketsUser = new ConcurrentDictionary<int, WebSocket>();
+        private static ConcurrentDictionary<WebSocket, string?> ConnectedSockets = new ConcurrentDictionary<WebSocket, string?>();
+        private static ConcurrentDictionary<string, WebSocket> LobbySockets = new ConcurrentDictionary<string, WebSocket>();
+        private static ConcurrentDictionary<int, WebSocket> LobbyUserSockets = new ConcurrentDictionary<int, WebSocket>();
+        private static int RematchCount = 0;
+        private static SemaphoreSlim LobbySemaphore = new SemaphoreSlim(2, 2);
 
-        private static SemaphoreSlim _lobbySemaphore = new SemaphoreSlim(2, 2);
-
-
-        public SocketRequester(UserServiceHandler userServiceHandlerFROMServiceRequest)
+        public SocketRequester(UserServiceHandler userServiceHandler)
         {
-            this._userServiceHandler = userServiceHandlerFROMServiceRequest;
+            _userServiceHandler = userServiceHandler;
         }
-
-
-
 
         public static async Task BroadcastMessage(string message)
         {
             var buffer = Encoding.UTF8.GetBytes(message);
-            var tasks = new List<Task>();
+            var tasks = ConnectedSockets.Keys
+                .Where(socket => socket.State == WebSocketState.Open)
+                .Select(socket => socket.SendAsync(new ArraySegment<byte>(buffer), WebSocketMessageType.Text, true, CancellationToken.None))
+                .ToList();
 
-            foreach (var socket in _sockets.Keys)
-            {
-                if (socket.State == WebSocketState.Open)
-                {
-                    tasks.Add(socket.SendAsync(new ArraySegment<byte>(buffer), WebSocketMessageType.Text, true, CancellationToken.None));
-                }
-            }
-
-            // Wait for all send operations to complete
             await Task.WhenAll(tasks);
         }
-
-
 
         public static async Task HandleWebSocketConnection(HttpListenerContext context)
         {
@@ -53,15 +44,14 @@ namespace SemesterProjekt1
                 var webSocketContext = await context.AcceptWebSocketAsync(null);
                 var webSocket = webSocketContext.WebSocket;
 
-                // Add the new socket to the dictionary
-                if (_sockets.TryAdd(webSocket, null))
+                if (ConnectedSockets.TryAdd(webSocket, null))
                 {
-                    Console.WriteLine("User connected to lobby. Total users: " + _sockets.Count);
+                    Console.WriteLine($"User connected to lobby. Total users: {ConnectedSockets.Count}");
                     await ReceiveMessages(webSocket);
                 }
                 else
                 {
-                    Console.WriteLine("Failed to add WebSocket to the dictionary. It might already exist.");
+                    Console.WriteLine("Failed to add WebSocket to the dictionary.");
                 }
             }
             catch (Exception ex)
@@ -89,7 +79,7 @@ namespace SemesterProjekt1
                     }
                     else if (result.MessageType == WebSocketMessageType.Close)
                     {
-                        break; // Exit the loop on close message
+                        break;
                     }
                 }
             }
@@ -99,111 +89,215 @@ namespace SemesterProjekt1
             }
             finally
             {
-                // Remove the socket from the dictionary upon disconnection
-                if (_sockets.TryRemove(webSocket, out _))
+                if (ConnectedSockets.TryRemove(webSocket, out _))
                 {
-                    Console.WriteLine("User disconnected from lobby. Total users: " + _sockets.Count);
+                    Console.WriteLine($"User disconnected from lobby. Total users: {ConnectedSockets.Count}");
                     await webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Closing", CancellationToken.None);
                 }
             }
         }
 
+        public async Task ReceiveRematchMessages(WebSocket webSocket)
+        {
+            var buffer = new byte[1024 * 4];
+            var rematchTimer = new CancellationTokenSource();
+
+            try
+            {
+                while (webSocket.State == WebSocketState.Open)
+                {
+                    var result = await webSocket.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None);
+                    if (result.MessageType == WebSocketMessageType.Text)
+                    {
+                        var message = Encoding.UTF8.GetString(buffer, 0, result.Count);
+                        Console.WriteLine($"Received: {message}");
+
+                        if (message == "rematch")
+                        {
+                            Interlocked.Increment(ref RematchCount);
+                            if (RematchCount == 2)
+                            {
+                                RematchCount = 0;
+                                rematchTimer.Cancel();
+                                await StartRematch();
+                            }
+                            else
+                            {
+                                rematchTimer.Cancel();
+                                rematchTimer = new CancellationTokenSource();
+                                _ = Task.Delay(TimeSpan.FromSeconds(20), rematchTimer.Token).ContinueWith(async t =>
+                                {
+                                    if (!t.IsCanceled)
+                                    {
+                                        await DisconnectUsers();
+                                    }
+                                });
+                            }
+                        }
+                        else
+                        {
+                            await BroadcastMessage(message);
+                        }
+                    }
+                    else if (result.MessageType == WebSocketMessageType.Close)
+                    {
+                        break;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error receiving rematch message: {ex.Message}");
+            }
+            finally
+            {
+                if (ConnectedSockets.TryRemove(webSocket, out _))
+                {
+                    Console.WriteLine($"User disconnected from lobby. Total users: {ConnectedSockets.Count}");
+                    await webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Closing", CancellationToken.None);
+                }
+            }
+        }
+
+        private async Task DisconnectUsers()
+        {
+            foreach (var socket in LobbySockets.Values)
+            {
+                if (socket.State == WebSocketState.Open)
+                {
+                    await socket.CloseAsync(WebSocketCloseStatus.NormalClosure, "No rematch request received", CancellationToken.None);
+                }
+            }
+
+            LobbySockets.Clear();
+            LobbyUserSockets.Clear();
+            Console.WriteLine("Users disconnected due to no rematch request.");
+        }
+
+        private async Task StartRematch()
+        {
+            var users = LobbyUserSockets.Keys.ToList();
+            var sockets = LobbySockets.Values.ToList();
+
+            User user1 = _userServiceHandler.GetUserById(users[0]);
+            User user2 = _userServiceHandler.GetUserById(users[1]);
+            var fightLogic = new FightLogic(user1, user2);
+            await fightLogic.StartBattleAsync(sockets[0], sockets[1]);
+
+            await BroadcastMessage("Log cleared for rematch.");
+        }
 
         public async Task HandleRequestAsync(HttpListenerContext context)
         {
-            HttpListenerRequest request = context.Request;
-            HttpListenerResponse response = context.Response;
-
             try
             {
                 if (context.Request.IsWebSocketRequest && context.Request.Url?.AbsolutePath == "/lobby2")
                 {
-                    Console.WriteLine("WebSocket request detected.");
-                    _ = HandleWebSocketConnection(context); // Fire-and-forget to handle multiple connections
+                    Console.WriteLine("Lobby 2 WebSocket request detected.");
+                    _ = HandleWebSocketConnection(context);
                 }
-                if (context.Request.IsWebSocketRequest && context.Request.Url?.AbsolutePath == "/lobby3")
+                else if (context.Request.IsWebSocketRequest && context.Request.Url?.AbsolutePath == "/lobby3")
                 {
-                    Console.WriteLine("WebSocket request detected.");
-                    LOBBYFIGHT(context);
+                    Console.WriteLine("Lobby 3 WebSocket request detected.");
+                    await HandleLobbyFight(context);
                 }
                 else
                 {
-                    response.StatusCode = (int)HttpStatusCode.NotFound;
-                    response.Close();
+                    context.Response.StatusCode = (int)HttpStatusCode.NotFound;
+                    context.Response.Close();
                 }
-                
             }
             catch (Exception ex)
             {
-                response.StatusCode = (int)HttpStatusCode.InternalServerError;
-                string errorMessage = $"Error: {ex.Message}\n{ex.StackTrace}";
-                SendResponse(response, errorMessage, "text/plain");
+                context.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
+                SendResponse(context.Response, $"Error: {ex.Message}\n{ex.StackTrace}", "text/plain");
             }
         }
 
- 
         public void SendResponse(HttpListenerResponse response, string content, string contentType)
         {
-            byte[] buffer = System.Text.Encoding.UTF8.GetBytes(content);
+            byte[] buffer = Encoding.UTF8.GetBytes(content);
             response.ContentLength64 = buffer.Length;
             response.ContentType = contentType;
             response.OutputStream.Write(buffer, 0, buffer.Length);
             response.OutputStream.Close();
         }
 
-
-        public async Task HandleWebSocketConnectionFight(HttpListenerContext context, User user)
+        public async Task HandleLobbyFight(HttpListenerContext context)
         {
-            try
+            var user = AuthenticateUserFromCookie(context);
+            if (user == null)
             {
-                if (!context.Request.Headers["Connection"].Contains("Upgrade") || !context.Request.Headers["Upgrade"].Contains("websocket"))
+                context.Response.StatusCode = (int)HttpStatusCode.Unauthorized;
+                return;
+            }
+
+            await HandleWebSocketFightConnection(context, user);
+        }
+
+        private async Task HandleWebSocketFightConnection(HttpListenerContext context, User user)
+        {
+            if (LobbySockets.Count >= 2)
+            {
+                var disconnectedUsers = LobbyUserSockets.Where(kvp => kvp.Value.State != WebSocketState.Open).Select(kvp => kvp.Key).ToList();
+                foreach (var userId in disconnectedUsers)
                 {
-                    throw new InvalidOperationException("The request does not contain the required WebSocket headers.");
+                    LobbyUserSockets.TryRemove(userId, out _);
                 }
 
+                var disconnectedSockets = LobbySockets.Where(kvp => kvp.Value.State != WebSocketState.Open).Select(kvp => kvp.Key).ToList();
+                foreach (var socketKey in disconnectedSockets)
+                {
+                    LobbySockets.TryRemove(socketKey, out _);
+                }
+                context.Response.StatusCode = (int)HttpStatusCode.Forbidden;
+                context.Response.Close();
+                Console.Write(LobbySockets.Count);
+                return;
+            }
+
+           
+
+            try
+            {
                 var webSocketContext = await context.AcceptWebSocketAsync(null);
                 var webSocket = webSocketContext.WebSocket;
 
-                // Add the new socket to the dictionary
-                if (_lobbySockets.TryAdd(context.Request.RemoteEndPoint.ToString(), webSocket))
+                if (LobbySockets.TryAdd(context.Request.RemoteEndPoint.ToString(), webSocket))
                 {
-                    _lobbySocketsUser.TryAdd(user.Id, webSocket);
-                    Console.WriteLine("User connected to lobby. Total users: " + _lobbySockets.Count);
+                    LobbyUserSockets.TryAdd(user.Id, webSocket);
+                    Console.WriteLine($"User connected to fight lobby. Total users: {LobbySockets.Count}");
 
-                    if (_lobbySockets.Count == 2)
+                    if (LobbySockets.Count == 2)
                     {
-                        // Start the fight when two users are connected
-                        var users = _lobbySocketsUser.Keys.ToList();
-                        var users2 = _lobbySockets.Values.ToList();
+                        var users = LobbyUserSockets.Keys.ToList();
+                        var sockets = LobbySockets.Values.ToList();
 
                         User user1 = _userServiceHandler.GetUserById(users[0]);
                         User user2 = _userServiceHandler.GetUserById(users[1]);
                         var fightLogic = new FightLogic(user1, user2);
-                        await fightLogic.StartBattleAsync(users2[0], users2[1]);
+                        await fightLogic.StartBattleAsync(sockets[0], sockets[1]);
                     }
                     else
                     {
-                        await ReceiveMessages(webSocket);
+                        await ReceiveRematchMessages(webSocket);
                     }
                 }
                 else
                 {
-                    Console.WriteLine("Failed to add WebSocket to the dictionary. It might already exist.");
+                    Console.WriteLine("Failed to add WebSocket to lobby.");
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error handling WebSocket connection: {ex.Message}");
+                Console.WriteLine($"Error handling WebSocket connection for fight lobby: {ex.Message}");
                 context.Response.StatusCode = 500;
                 context.Response.Close();
             }
         }
 
-
-
-        private void LOBBYFIGHT( HttpListenerContext context)
+        private User AuthenticateUserFromCookie(HttpListenerContext context)
         {
-            // Existing code to retrieve user data
             var userDataCookie = context.Request.Cookies["userData"]?.Value;
             var userData = System.Web.HttpUtility.ParseQueryString(userDataCookie);
             string username = userData["username"];
@@ -211,35 +305,7 @@ namespace SemesterProjekt1
             string userIdString = userData["userid"];
             int userId = int.Parse(userIdString);
 
-            // Authenticate the user
-            var user = _userServiceHandler.AuthenticateUser(username, password);
-            if (user == null)
-            {
-                // Handle unauthorized
-                context.Response.StatusCode = (int)HttpStatusCode.Unauthorized;
-                return;
-            }
-
-            // Connect to the fight WebSocket with user data
-            _ = HandleWebSocketConnectionFight(context, user);
+            return _userServiceHandler.AuthenticateUser(username, password);
         }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     }
 }
