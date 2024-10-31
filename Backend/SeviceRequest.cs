@@ -2,6 +2,7 @@
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
+using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 
@@ -12,34 +13,25 @@ namespace SemesterProjekt1
         public UserServiceHandler _userServiceHandler = new UserServiceHandler(); 
         private HTMLGEN _htmlgen = new HTMLGEN(new UserServiceHandler());
 
-        public async Task HandleRequestAsync(TcpClient client, string method, string path)
+        public async Task HandleRequestAsync(StreamReader request, StreamWriter response, string method, string path)
         {
             try
             {
-                var networkStream = client.GetStream();
-
-                // Check if the network stream is readable and writable
-                if (!networkStream.CanRead || !networkStream.CanWrite)
-                {
-                    Console.WriteLine("NetworkStream is not readable or writable.");
-                    return;
-                }
-
-                var request = new StreamReader(networkStream); // Request
-                var response = new StreamWriter(networkStream) { AutoFlush = true }; // Response
+                
 
                 switch (method)
                 {
                     case "GET":
-                        await HandleGetRequestAsync(request, response, client, path);
+                        await HandleGetRequestAsync(request, response, path);
                         break;
                     case "POST":
-                        await HandlePostRequestAsync(request, response, client, path);
+                        await HandlePostRequestAsync(request, response, path);
                         break;
                     default:
                         response.WriteLine("HTTP/1.1 405 Method Not Allowed");
                         response.WriteLine("Content-Length: 0");
                         response.WriteLine();
+                        response.Flush();
                         break;
                 }
             }
@@ -50,7 +42,7 @@ namespace SemesterProjekt1
         }
 
 
-        private async Task HandleGetRequestAsync(StreamReader request, StreamWriter response, TcpClient client, string path1)
+        private async Task HandleGetRequestAsync(StreamReader request, StreamWriter response, string path1)
         {
             switch (path1)
             {
@@ -64,8 +56,8 @@ namespace SemesterProjekt1
                     string jsonResponse = SerializeToJson(allUsers);
                     SendResponse(response, jsonResponse, "application/json");
                     break;
-                case string path when path.StartsWith("/user/"):
-          //          await HandleGetUserByIdAsync(request, response);
+                case string path when path1.StartsWith("/user/"):
+                    await HandleGetUserByIdAsync(request, response,path1);
                     break;
                 case "/login":
             //        _htmlgen.SendLoginPage(response);
@@ -81,7 +73,7 @@ namespace SemesterProjekt1
             }
         }
 
-        private async Task HandlePostRequestAsync(StreamReader request, StreamWriter response, TcpClient client, string path1)
+        private async Task HandlePostRequestAsync(StreamReader request, StreamWriter response, string path1)
         {
             switch (path1)
             {
@@ -114,25 +106,27 @@ namespace SemesterProjekt1
             }
         }
 
-        private async Task HandleGetUserByIdAsync(StreamWriter writer, string path)
+        private async Task HandleGetUserByIdAsync(StreamReader request, StreamWriter response, string path)
         {
+            Console.WriteLine(path);
             string userIdString = path.Substring(6);
+            
             if (int.TryParse(userIdString, out int userId))
             {
                 var user = _userServiceHandler.GetUserById(userId);
                 if (user != null)
                 {
                     string jsonResponse = SerializeToJson(user);
-                    SendResponse(writer, jsonResponse, "application/json");
+                    SendResponse(response, jsonResponse, "application/json");
                 }
                 else
                 {
-                    SendErrorResponse(writer, HttpStatusCode.NotFound, "User Not Found");
+                    SendErrorResponse(response, HttpStatusCode.BadRequest);
                 }
             }
             else
             {
-                SendErrorResponse(writer, HttpStatusCode.BadRequest, "Invalid User ID");
+                SendErrorResponse(response, HttpStatusCode.BadRequest);
             }
         }
 
@@ -189,46 +183,83 @@ namespace SemesterProjekt1
 
         private async Task HandleLoginAsyncCURL(StreamReader reader, StreamWriter writer)
         {
+            if (!writer.BaseStream.CanWrite)
+            { Console.WriteLine("Error"); }
+
+
+
+
             try
             {
-                string requestBody = await reader.ReadToEndAsync();
-                string username = null;
-                string password = null;
+                Console.WriteLine("Here1");
 
-           /*    // if ( Check content type manually or assume JSON )
+                string requestBodyString = await ReadRequestBodyAsync(reader, writer);
+
+
+                string? username = null;
+                string? password = null;
+
+                if (IsJson(requestBodyString))
                 {
-                    var user = JsonSerializer.Deserialize<User>(requestBody);
-                    username = user.Username;
-                    password = user.Password;
+                    try
+                    {
+                        var user1 = JsonSerializer.Deserialize<User>(requestBodyString);
+                        if (user1 != null)
+                        {
+                            username = user1.Username;
+                            password = user1.Password;
+                            Console.WriteLine($"Deserialized User - Username: {username}, Password: {password}");
+                        }
+                        else
+                        {
+                            Console.WriteLine("Deserialized user is null.");
+                        }
+                    }
+                    catch (JsonException jsonEx)
+                    {
+                        Console.WriteLine($"JSON deserialization error: {jsonEx.Message}");
+                        SendErrorResponse(writer, HttpStatusCode.BadRequest);
+                        return;
+                    }
                 }
-                */
+                else
+                {
+                    Console.WriteLine("Invalid JSON format.");
+                    SendErrorResponse(writer, HttpStatusCode.BadRequest);
+                    return;
+                }
+
+                if (username == null || password == null)
+                {
+                    SendErrorResponse(writer, HttpStatusCode.BadRequest);
+                    return;
+                }
 
                 var authenticatedUser = _userServiceHandler.AuthenticateUser(username, password);
                 if (authenticatedUser != null)
                 {
                     string token = $"{authenticatedUser.Username}-mtcgToken";
-
-                    // Create the cookies as strings to mimic HTTP cookies
-                    writer.WriteLine("HTTP/1.1 200 OK");
-                    writer.WriteLine("Set-Cookie: authToken=" + token);
-                    writer.WriteLine("Set-Cookie: userData=username=" + username + "&password=" + password + "&userid=" + authenticatedUser.Id);
-                    writer.WriteLine("Content-Type: text/html");
-                    writer.WriteLine();
-                    writer.WriteLine(token);
+                    string response = $"HTTP/1.1 200 OK\r\nSet-Cookie: authToken={token}\r\nContent-Type: text/html\r\nContent-Length: {token.Length}\r\n\r\n{token}";
+                    byte[] responseBytes = Encoding.UTF8.GetBytes(response);
+                    Console.WriteLine("Yes");
+                    await writer.BaseStream.WriteAsync(responseBytes, 0, responseBytes.Length);
+                    await writer.BaseStream.FlushAsync();
+                    Console.WriteLine("Yes");
                 }
                 else
                 {
-                    writer.WriteLine("HTTP/1.1 400 Bad Request");
-                    writer.WriteLine("Content-Length: 0");
-                    writer.WriteLine();
+                    SendErrorResponse(writer, HttpStatusCode.BadRequest);
                 }
+            }
+            catch (IOException ioEx)
+            {
+                Console.WriteLine($"I/O error during login: {ioEx.Message}");
+                SendErrorResponse(writer, HttpStatusCode.InternalServerError);
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"Error during login: {ex.Message}");
-                writer.WriteLine("HTTP/1.1 500 Internal Server Error");
-                writer.WriteLine("Content-Length: 0");
-                writer.WriteLine();
+                SendErrorResponse(writer, HttpStatusCode.InternalServerError);
             }
         }
 
@@ -243,6 +274,7 @@ namespace SemesterProjekt1
                 writer.WriteLine("Content-Type: text/plain");
                 writer.WriteLine();
                 writer.WriteLine("Logged out successfully.");
+                writer.Flush();
             }
             catch (Exception ex)
             {
@@ -250,6 +282,7 @@ namespace SemesterProjekt1
                 writer.WriteLine("HTTP/1.1 500 Internal Server Error");
                 writer.WriteLine("Content-Length: 0");
                 writer.WriteLine();
+                writer.Flush();
             }
         }
 
@@ -432,6 +465,78 @@ async Task HandleAddCardToDeckAsync(StreamReader reader, StreamWriter writer)
 
             return true;
         }
+        private bool IsJson(string input)
+        {
+            
+            input = input.Trim();
+            Console.WriteLine(input);
+            return input.StartsWith("{") && input.EndsWith("}") || input.StartsWith("[") && input.EndsWith("]");
+        }
+
+
+
+        private async Task<string> ReadRequestBodyAsync(StreamReader reader, StreamWriter writer)
+        {
+            string? requestLine = await reader.ReadLineAsync();
+            if (requestLine == null)
+            {
+                Console.WriteLine("No request line received.");
+                SendErrorResponse(writer, HttpStatusCode.BadRequest);
+                return string.Empty;
+            }
+
+            Console.WriteLine($"Request line: {requestLine}");
+
+            int contentLength = 0;
+            string? line;
+            while ((line = await reader.ReadLineAsync()) != null && line != "")
+            {
+                Console.WriteLine($"Header: {line}");
+                if (line.StartsWith("Content-Length:"))
+                {
+                    var parts = line.Split(':');
+                    if (parts.Length > 1 && int.TryParse(parts[1].Trim(), out contentLength))
+                    {
+                        Console.WriteLine($"Content-Length: {contentLength}");
+                    }
+                }
+            }
+
+            if (contentLength <= 0)
+            {
+                Console.WriteLine("Content-Length is invalid or missing.");
+                SendErrorResponse(writer, HttpStatusCode.BadRequest);
+                return string.Empty;
+            }
+
+            var requestBody = new char[contentLength];
+            int totalBytesRead = 0;
+
+            while (totalBytesRead < contentLength)
+            {
+                int bytesRead = await reader.ReadAsync(requestBody, totalBytesRead, contentLength - totalBytesRead);
+                if (bytesRead == 0)
+                {
+                    Console.WriteLine("End of stream reached before content length was fulfilled.");
+                    break;
+                }
+                totalBytesRead += bytesRead;
+            }
+
+            string requestBodyString = new string(requestBody);
+            Console.WriteLine($"Received request body: {requestBodyString}");
+            return requestBodyString;
+        }
+
+
+        private void SendErrorResponse(StreamWriter writer, HttpStatusCode statusCode)
+        {
+            writer.WriteLine($"HTTP/1.1 {(int)statusCode} {statusCode}");
+            writer.WriteLine("Content-Length: 0");
+            writer.WriteLine();
+            writer.Flush();
+        }
+
 
 
 

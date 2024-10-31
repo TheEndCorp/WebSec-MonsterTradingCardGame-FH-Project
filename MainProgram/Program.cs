@@ -8,6 +8,7 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 using System.Net.WebSockets;
+using Microsoft.VisualStudio.TestPlatform.ObjectModel.DataCollection;
 
 namespace SemesterProjekt1
 {
@@ -69,98 +70,110 @@ namespace SemesterProjekt1
             }
         }
 
-        private static async Task HandleClientAsync(TcpClient client, UserServiceRequest requester, SocketRequester socketRequester)
+private static async Task HandleClientAsync(TcpClient client, UserServiceRequest requester, SocketRequester socketRequester)
+{
+    try
+    {
+        using (var networkStream = client.GetStream())
         {
-            try
-            {
-                using (var networkStream = client.GetStream())
-                {
                     // Check if the stream is usable
                     if (networkStream.CanRead && networkStream.CanWrite)
                     {
-                        byte[] buffer = new byte[4096];
-                        int bytesRead = await networkStream.ReadAsync(buffer, 0, buffer.Length);
-                        string requestText = Encoding.UTF8.GetString(buffer, 0, bytesRead);
-                        Console.BackgroundColor = ConsoleColor.DarkGreen;
-                        Console.WriteLine($"Received request:\n{requestText}");
-                        Console.ResetColor();   
-                        // Parse HTTP request
-                        string[] requestLines = requestText.Split(new[] { "\r\n" }, StringSplitOptions.None);
-                        string requestLine = requestLines[0];
-                        string[] requestParts = requestLine.Split(' ');
-                        if (requestParts.Length < 2)
+                        using (MemoryStream memoryStream = new MemoryStream())
                         {
-                            return;
-                        }
+                            byte[] buffer = new byte[4096];
+                            int bytesRead;
 
-                        string method = requestParts[0];
-                        string path = requestParts[1];
+                            // Read from the network stream into the memory stream
+                            bytesRead = await networkStream.ReadAsync(buffer, 0, buffer.Length);
 
-                        // Handle WebSocket upgrade or HTTP request based on path
-                        if (requestText.Contains("Upgrade: websocket"))
-                        {
-                            Console.WriteLine("WebSocket request detected.");
-                            await HandleSocketRequestAsync(socketRequester, client, path);
+                            // Only process if we have data
+                            if (bytesRead > 0)
+                            {
+                                await memoryStream.WriteAsync(buffer, 0, bytesRead);
+                                memoryStream.Position = 0; // Reset position for reading
+
+                                // Convert the MemoryStream to a string for the request
+                                string requestText = Encoding.UTF8.GetString(memoryStream.ToArray());
+
+                                Console.BackgroundColor = ConsoleColor.DarkBlue;
+                                Console.WriteLine($"Received request:\n{requestText}");
+                                Console.ResetColor();
+
+                                // Parse HTTP request
+                                string[] requestLines = requestText.Split(new[] { "\r\n\r\n" }, 2, StringSplitOptions.None);
+                                string requestLine = requestLines[0];
+                                string[] requestParts = requestLine.Split(' ');
+
+                                if (requestParts.Length < 2)
+                                {
+                                    SendErrorResponse(networkStream, HttpStatusCode.BadRequest);
+                                    return;
+                                }
+
+                                string method = requestParts[0];
+                                string path = requestParts[1];
+
+                                // Handle WebSocket upgrade or HTTP request based on path
+                                if (requestText.Contains("Upgrade: websocket"))
+                                {
+                                    Console.WriteLine("WebSocket request detected.");
+                                    await HandleSocketRequestAsync(socketRequester, client, path);
+                                }
+                                else if (path == "/login2")
+                                {
+                                    Console.WriteLine("HTTP request for login page.");
+                                    await SendHttpResponseAsync(networkStream, GenerateLoginPageHtml());
+                                }
+                                else if (path == "/login3")
+                                {
+                                    Console.WriteLine("HTTP request for fight lobby.");
+                                    await SendHttpResponseAsync(networkStream, GenerateFightLobbyHtml());
+                                }
+                                else
+                                {
+                                    Console.WriteLine("Generic HTTP request received.");
+                                    await HandleRequestAsync(memoryStream, networkStream, method, path, requester);
+                                }
+                            }
                         }
-                        else if (path == "/login2")
-                        {
-                            Console.WriteLine("HTTP request for login page.");
-                            await SendHttpResponseAsync(networkStream, GenerateLoginPageHtml());
-                        }
-                        else if (path == "/login3")
-                        {
-                            Console.WriteLine("HTTP request for fight lobby.");
-                            await SendHttpResponseAsync(networkStream, GenerateFightLobbyHtml());
-                        }
-                        else
-                        {
-                            Console.WriteLine("Generic HTTP request received.");
-                            await HandleRequestAsync(requester, client, method, path);
-                        }
-                    }
-                    else
-                    {
-                        Console.WriteLine("NetworkStream is not readable or writable.");
-                    }
-                }
             }
-            catch (IOException ioEx)
+            else
             {
-                Console.WriteLine($"IO Error handling client: {ioEx.Message}");
+                Console.WriteLine("NetworkStream is not readable or writable.");
             }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error handling client: {ex.Message}");
-            }
-
         }
+    }
+    catch (IOException ioEx)
+    {
+        Console.WriteLine($"IO Error handling client: {ioEx.Message}");
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"Error handling client: {ex.Message}");
+    }
+}
 
 
 
 
 
 
-        private static async Task HandleRequestAsync(UserServiceRequest requester, TcpClient client, string method, string path)
+
+        private static async Task HandleRequestAsync(MemoryStream memoryStream, NetworkStream networkStream, string method, string path, UserServiceRequest requester)
         {
             try
             {
+                memoryStream.Position = 0; // Reset position for reading
+                using var reader = new StreamReader(memoryStream);
+                using var writer = new StreamWriter(networkStream) { AutoFlush = true };
 
-                var networkStream = client.GetStream();
-                if (networkStream.CanRead && networkStream.CanWrite)
-                {
-
-
-
-                    await requester.HandleRequestAsync(client, method, path);
-                    await Task.Run(() => requester._userServiceHandler._databaseHandler.SaveUsers(requester._userServiceHandler._users));
-                    Console.WriteLine("Action");
-                }
-            
-            else Console.WriteLine("PAIN");
+                await requester.HandleRequestAsync(reader, writer, method, path);
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"Error handling request: {ex.Message}");
+                SendErrorResponse(memoryStream, HttpStatusCode.InternalServerError);
             }
         }
 
@@ -184,6 +197,8 @@ namespace SemesterProjekt1
             string response = $"HTTP/1.1 200 OK\r\nContent-Type: {contentType}\r\nContent-Length: {Encoding.UTF8.GetByteCount(content)}\r\n\r\n{content}";
             byte[] responseBytes = Encoding.UTF8.GetBytes(response);
             await networkStream.WriteAsync(responseBytes, 0, responseBytes.Length);
+            await networkStream.FlushAsync();  // Ensure data is sent immediately.
+            Console.WriteLine("HTTP response sent to client.");
         }
 
         private static string GenerateLoginPageHtml()
@@ -292,5 +307,26 @@ namespace SemesterProjekt1
             }
             throw new Exception("Keine IPv4-Adresse im lokalen Netzwerk gefunden.");
         }
-    }
+   
+
+
+
+
+    private static void SendErrorResponse(Stream stream, HttpStatusCode statusCode)
+    {
+        string response = $"HTTP/1.1 {(int)statusCode} {statusCode}\r\nContent-Length: 0\r\n\r\n";
+        byte[] responseBytes = Encoding.UTF8.GetBytes(response);
+        stream.Write(responseBytes, 0, responseBytes.Length);
+        stream.Flush();  // Ensure data is sent immediately.
+
+        }   
+
+
+ }
+
+
+
+
+
+
 }
