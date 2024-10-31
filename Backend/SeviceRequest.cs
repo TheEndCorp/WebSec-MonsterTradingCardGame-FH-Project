@@ -2,22 +2,29 @@
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
+using System.Reflection.PortableExecutable;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
+
+
+// 20 hours already Wasted from HTTPLISTENER -> TCP ANDWiwkndiunwaidon Day 3 Note of this shit 
+
+
+
 
 namespace SemesterProjekt1
 {
     public class UserServiceRequest
     {
-        public UserServiceHandler _userServiceHandler = new UserServiceHandler(); 
+        public UserServiceHandler _userServiceHandler = new UserServiceHandler();
         private HTMLGEN _htmlgen = new HTMLGEN(new UserServiceHandler());
 
         public async Task HandleRequestAsync(StreamReader request, StreamWriter response, string method, string path)
         {
             try
             {
-                
+
 
                 switch (method)
                 {
@@ -57,13 +64,16 @@ namespace SemesterProjekt1
                     SendResponse(response, jsonResponse, "application/json");
                     break;
                 case string path when path1.StartsWith("/user/"):
-                    await HandleGetUserByIdAsync(request, response,path1);
+                    await HandleGetUserByIdAsync(request, response, path1);
                     break;
                 case "/login":
-            //        _htmlgen.SendLoginPage(response);
+                    //        _htmlgen.SendLoginPage(response);
                     break;
                 case "/lobby":
                     //_htmlgen.SendLobbyPage(request, response);
+                    break;
+                case "/logout":
+                    await HandleLogout(response);
                     break;
                 default:
                     response.WriteLine("HTTP/1.1 404 Not Found");
@@ -78,25 +88,22 @@ namespace SemesterProjekt1
             switch (path1)
             {
                 case "/users":
-            //        await HandleAddUserAsync(request, response);
+                    await HandleAddUserAsync(request, response);
                     break;
                 case "/login":
-              //      await HandleLoginAsync(request, response);
+                    await HandleLoginAsync(request, response);
                     break;
                 case "/sessions":
                     await HandleLoginAsyncCURL(request, response);
                     break;
-                case "/logout":
-             //       HandleLogout(request, response);
-                    break;
                 case "/openpack":
-             //       await HandleOpenCardPackAsync(request, response);
+                    //       await HandleOpenCardPackAsync(request, response);
                     break;
                 case "/inventory":
-             //       await HandleBuyPacksAsync(request, response);
+                    //       await HandleBuyPacksAsync(request, response);
                     break;
                 case "/add-card-to-deck":
-             //       await HandleAddCardToDeckAsync(request, response);
+                    //       await HandleAddCardToDeckAsync(request, response);
                     break;
                 default:
                     response.WriteLine("HTTP/1.1 404 Not Found");
@@ -110,7 +117,7 @@ namespace SemesterProjekt1
         {
             Console.WriteLine(path);
             string userIdString = path.Substring(6);
-            
+
             if (int.TryParse(userIdString, out int userId))
             {
                 var user = _userServiceHandler.GetUserById(userId);
@@ -130,8 +137,12 @@ namespace SemesterProjekt1
             }
         }
 
-        private async Task HandleAddUserAsync(StreamWriter writer, string requestBody)
+        private async Task HandleAddUserAsync(StreamReader request, StreamWriter response)
         {
+
+            string requestBody = await ReadRequestBodyAsync(request, response);
+
+
             var user = DeserializeUser(requestBody);
             if (user != null && (IsValidInput(user.Username) && IsValidInput(user.Password)))
             {
@@ -139,36 +150,41 @@ namespace SemesterProjekt1
                 if (existingUser == null)
                 {
                     _userServiceHandler.AddUser(user);
-                    SendResponse(writer, "User created successfully", "application/json", HttpStatusCode.Created);
+                    SendResponse(response, "User created successfully", "application/text", HttpStatusCode.Created);
                 }
                 else
                 {
-                    SendErrorResponse(writer, HttpStatusCode.Conflict, "User already exists");
+                    SendErrorResponse(response, HttpStatusCode.Conflict, "User already exists");
                 }
             }
             else
             {
-                SendErrorResponse(writer, HttpStatusCode.BadRequest, "Invalid user data");
+                SendErrorResponse(response, HttpStatusCode.BadRequest, "Invalid user data");
             }
         }
 
-        private async Task HandleLoginAsync(StreamWriter writer, string requestBody)
+        private async Task HandleLoginAsync(StreamReader request, StreamWriter response)
         {
-            var formData = System.Web.HttpUtility.ParseQueryString(requestBody);
-            string username = formData["username"];
-            string password = formData["password"];
 
-            var user = _userServiceHandler.AuthenticateUser(username, password);
-            if (user != null)
-            {
-                string token = $"{user.Username}-mtcgToken";
-                SendResponse(writer, $"Login successful. Token: {token}", "text/plain");
+                var user = await IsIdentiyYesUser(request, response);
+                if (user != null)
+                {
+                    string token = $"{user.Username}-mtcgToken";
+                    response.WriteLine($"HTTP/1.1 200 OK");
+                    response.WriteLine($"Set-Cookie: authToken={token};");
+                    response.WriteLine($"Set-Cookie: userData=username={user.Username}&password={user.Password}&userid={user.Id};");
+                    response.WriteLine("Content-Type: text/plain");
+                    response.WriteLine($"Content-Length: {token.Length}+24");
+                    response.WriteLine();
+                    response.WriteLine($"Login successful. Token: {token}");
+                    response.Flush();
+                }
+                else
+                {
+                    SendErrorResponse(response, HttpStatusCode.Unauthorized, "Invalid username or password");
+                }
             }
-            else
-            {
-                SendErrorResponse(writer, HttpStatusCode.Unauthorized, "Invalid username or password");
-            }
-        }
+        
 
         private void SendErrorResponse(StreamWriter writer, HttpStatusCode statusCode, string message)
         {
@@ -188,54 +204,13 @@ namespace SemesterProjekt1
 
 
 
-
+            //////////////////////////////////////////////
             try
             {
-                Console.WriteLine("Here1");
-
-                string requestBodyString = await ReadRequestBodyAsync(reader, writer);
 
 
-                string? username = null;
-                string? password = null;
 
-                if (IsJson(requestBodyString))
-                {
-                    try
-                    {
-                        var user1 = JsonSerializer.Deserialize<User>(requestBodyString);
-                        if (user1 != null)
-                        {
-                            username = user1.Username;
-                            password = user1.Password;
-                            Console.WriteLine($"Deserialized User - Username: {username}, Password: {password}");
-                        }
-                        else
-                        {
-                            Console.WriteLine("Deserialized user is null.");
-                        }
-                    }
-                    catch (JsonException jsonEx)
-                    {
-                        Console.WriteLine($"JSON deserialization error: {jsonEx.Message}");
-                        SendErrorResponse(writer, HttpStatusCode.BadRequest);
-                        return;
-                    }
-                }
-                else
-                {
-                    Console.WriteLine("Invalid JSON format.");
-                    SendErrorResponse(writer, HttpStatusCode.BadRequest);
-                    return;
-                }
-
-                if (username == null || password == null)
-                {
-                    SendErrorResponse(writer, HttpStatusCode.BadRequest);
-                    return;
-                }
-
-                var authenticatedUser = _userServiceHandler.AuthenticateUser(username, password);
+                var authenticatedUser = await IsIdentiyYesUser(reader, writer);
                 if (authenticatedUser != null)
                 {
                     string token = $"{authenticatedUser.Username}-mtcgToken";
@@ -264,7 +239,7 @@ namespace SemesterProjekt1
         }
 
 
-        private void HandleLogout(StreamWriter writer)
+        private async Task HandleLogout(StreamWriter writer)
         {
             try
             {
@@ -443,8 +418,8 @@ async Task HandleAddCardToDeckAsync(StreamReader reader, StreamWriter writer)
         {
             return JsonSerializer.Serialize(obj);
         }
-        
-        
+
+
         private bool IsValidInput(string input)
         {
             // Überprüfen Sie auf schädliche Zeichen oder Muster
@@ -467,12 +442,86 @@ async Task HandleAddCardToDeckAsync(StreamReader reader, StreamWriter writer)
         }
         private bool IsJson(string input)
         {
-            
+
             input = input.Trim();
             Console.WriteLine(input);
             return input.StartsWith("{") && input.EndsWith("}") || input.StartsWith("[") && input.EndsWith("]");
         }
 
+        private async Task<User> IsIdentiyYesUser(StreamReader reader, StreamWriter writer)
+        {
+
+            if (!writer.BaseStream.CanWrite)
+            { Console.WriteLine("Error");
+                return null;
+            }
+
+            string requestBodyString = await ReadRequestBodyAsync(reader, writer);
+
+
+
+
+                string? username = null;
+                string? password = null;
+
+                if (IsJson(requestBodyString))
+                {
+                    try
+                    {
+                        var user1 = JsonSerializer.Deserialize<User>(requestBodyString);
+                        if (user1 != null)
+                        {
+                            username = user1.Username;
+                            password = user1.Password;
+                            Console.WriteLine($"Deserialized User - Username: {username}, Password: {password}");
+
+                        }
+                        else
+                        {
+                            Console.WriteLine("Deserialized user is null.");
+                        }
+                    }
+                    catch (JsonException jsonEx)
+                    {
+                        Console.WriteLine($"JSON deserialization error: {jsonEx.Message}");
+                        SendErrorResponse(writer, HttpStatusCode.BadRequest);
+                        return null;
+                    }
+                }
+                else
+                {
+                    Console.WriteLine("Invalid JSON format.");
+                    SendErrorResponse(writer, HttpStatusCode.BadRequest);
+                    return null;
+                }
+
+                if (username == null || password == null)
+                {
+                    SendErrorResponse(writer, HttpStatusCode.BadRequest);
+                    return null;
+                }
+
+                //////////////////////////////////////////////
+
+
+                var authenticatedUser = _userServiceHandler.AuthenticateUser(username, password);
+
+
+                if (authenticatedUser != null) return authenticatedUser;
+                else
+                {
+                    SendErrorResponse(writer, HttpStatusCode.BadRequest);
+                    return null;
+                }
+
+         }
+
+
+
+
+
+
+            
 
 
         private async Task<string> ReadRequestBodyAsync(StreamReader reader, StreamWriter writer)
@@ -525,8 +574,61 @@ async Task HandleAddCardToDeckAsync(StreamReader reader, StreamWriter writer)
 
             string requestBodyString = new string(requestBody);
             Console.WriteLine($"Received request body: {requestBodyString}");
+
+            // Setzen Sie den Stream zurück an den Anfang
+            reader.BaseStream.Seek(0, SeekOrigin.Begin);
+            reader.DiscardBufferedData();
+
             return requestBodyString;
         }
+
+        private async Task<string> ReadRequestBodyCookieAsync(StreamReader reader, StreamWriter writer)
+        {
+            string? requestLine = await reader.ReadLineAsync();
+            if (requestLine == null)
+            {
+                Console.WriteLine("No request line received.");
+                SendErrorResponse(writer, HttpStatusCode.BadRequest);
+                return string.Empty;
+            }
+
+            Console.WriteLine($"Request line: {requestLine}");
+
+            string? line;
+            string? userDataCookie = null;
+            while ((line = await reader.ReadLineAsync()) != null && line != "")
+            {
+                if (line.StartsWith("Cookie:"))
+                {
+                    var cookies = line.Substring("Cookie:".Length).Trim().Split(';');
+                    foreach (var cookie in cookies)
+                    {
+                        var cookieParts = cookie.Split('=');
+                        if (cookieParts.Length == 2 && cookieParts[0].Trim() == "userData")
+                        {
+                            userDataCookie = cookieParts[1].Trim();
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (userDataCookie == null)
+            {
+                Console.WriteLine("userData cookie not found.");
+                SendErrorResponse(writer, HttpStatusCode.BadRequest);
+                return string.Empty;
+            }
+
+            Console.WriteLine($"userData cookie: {userDataCookie}");
+
+            reader.BaseStream.Seek(0, SeekOrigin.Begin);
+            reader.DiscardBufferedData();
+            return userDataCookie;
+        }
+
+
+
 
 
         private void SendErrorResponse(StreamWriter writer, HttpStatusCode statusCode)
