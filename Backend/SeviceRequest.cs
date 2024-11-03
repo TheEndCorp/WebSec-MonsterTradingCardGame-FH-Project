@@ -10,7 +10,7 @@ using System.Threading.Tasks;
 
 
 // 20 hours already Wasted from HTTPLISTENER -> TCP ANDWiwkndiunwaidon Day 3 Note of this shit 
-
+// 25 and nearly finished 
 
 
 
@@ -101,10 +101,10 @@ namespace SemesterProjekt1
                   await HandleOpenCardPackAsync(request, response);
                     break;
                 case "/inventory":
-                    //       await HandleBuyPacksAsync(request, response);
+                          await HandleBuyPacksAsync(request, response);
                     break;
                 case "/add-card-to-deck":
-                    //       await HandleAddCardToDeckAsync(request, response);
+                          await HandleAddCardToDeckAsync(request, response);
                     break;
                 default:
                     response.WriteLine("HTTP/1.1 404 Not Found");
@@ -307,76 +307,81 @@ namespace SemesterProjekt1
             }
             }
 
-        
 
-/*
+
+
 
         private async Task HandleBuyPacksAsync(StreamReader reader, StreamWriter writer)
         {
-            string requestBody = await reader.ReadToEndAsync();
-            var formData = System.Web.HttpUtility.ParseQueryString(requestBody);
+            var user = await IsIdentiyYesUserCookie(reader, writer);
+            string requestBodyString = await ReadRequestBodyAsync(reader, writer);
 
-            // Simulate cookie handling by parsing manually
-          //  string userDataCookie =  retrieve userData value ;
-            if (userDataCookie != null)
+            if (user != null)
             {
-                var userData = System.Web.HttpUtility.ParseQueryString(userDataCookie);
-                string username = userData["username"];
-                string password = userData["password"];
-                string userIdString = userData["userid"];
-                int userid = int.Parse(userIdString);
+                string[] parameters = requestBodyString.Split('&');
+                int amount = 0;
 
-                var user = _userServiceHandler.AuthenticateUser(username, password);
-                if (user != null)
+                foreach (var param in parameters)
                 {
-                    if (int.TryParse(formData["Amount"], out int amount))
+                    string[] keyValue = param.Split('=');
+                    if (keyValue[0] == "Amount" && int.TryParse(keyValue[1], out amount))
                     {
-                        user.Inventory.AddCardPack(new CardPack(userid), amount);
-                        _userServiceHandler.UpdateUser(user.Id, user);
-                        string jsonResponse = SerializeToJson(new { message = "Packs bought successfully" });
-                        SendResponse(writer, jsonResponse, "application/json");
+                        break;
                     }
-                    else
-                    {
-                        SendErrorResponse(writer, HttpStatusCode.BadRequest, "Invalid amount.");
-                    }
+                }
+
+                if (amount > 0)
+                {
+                    user.Inventory.AddCardPack(new CardPack(user.Id), amount);
+                    _userServiceHandler.UpdateUser(user.Id, user);
+                    string jsonResponse = SerializeToJson(new { message = "Packs bought successfully" });
+                    writer.WriteLine("HTTP/1.1 200 OK");
+                    writer.WriteLine("Content-Type: application/json");
+                    writer.WriteLine($"Content-Length: {jsonResponse.Length}");
+                    writer.WriteLine();
+                    writer.WriteLine(jsonResponse);
+                    writer.Flush();
                 }
                 else
                 {
-                    SendErrorResponse(writer, HttpStatusCode.Unauthorized, "Invalid username or password.");
+                    SendErrorResponse(writer, HttpStatusCode.BadRequest, "Invalid amount.");
                 }
             }
             else
             {
-                SendErrorResponse(writer, HttpStatusCode.BadRequest, "Invalid user ID.");
+                SendErrorResponse(writer, HttpStatusCode.Unauthorized, "Invalid username or password.");
             }
         }
 
-        
+     
 
 async Task HandleAddCardToDeckAsync(StreamReader reader, StreamWriter writer)
         {
             try
             {
-                string requestBody = await reader.ReadToEndAsync();
-                var formData = System.Web.HttpUtility.ParseQueryString(requestBody);
+                var user = await IsIdentiyYesUserCookie(reader, writer);
+                string requestBodyString = await ReadRequestBodyAsync(reader, writer);
 
-                // Simulate cookie handling by parsing manually
-                string userDataCookie = 
-                if (userDataCookie != null)
+                if (user != null)
                 {
-                    var userData = System.Web.HttpUtility.ParseQueryString(userDataCookie);
-                    string username = userData["username"];
-                    string password = userData["password"];
-                    string userIdString = userData["userid"];
-                    int userId = int.Parse(userIdString);
 
-                    var user = _userServiceHandler.AuthenticateUser(username, password);
-                    string[] cardIndices = formData.GetValues("cardIndices");
+              
+               var  parameters = requestBodyString.Split('&');
+                                    List<int> cardIndices = new List<int>();
+                                  
+
+                                    foreach (var param in parameters)
+                                    {
+                                        string[] keyValue = param.Split('=');
+                                        if (keyValue[0] == "cardIndices" && int.TryParse(keyValue[1], out int index))
+                                        {
+                                            cardIndices.Add(index);
+                                        }
+                                    }
 
                     if (cardIndices != null)
                     {
-                        int[] cardPositions = cardIndices.Select(int.Parse).ToArray();
+                        int[] cardPositions = cardIndices.Select(index => index).ToArray();
                         _userServiceHandler.AddCardToDeck(user.Id, user.Username, user.Password, cardPositions);
                         SendResponse(writer, "Cards added to deck successfully.", "text/html");
                     }
@@ -396,7 +401,7 @@ async Task HandleAddCardToDeckAsync(StreamReader reader, StreamWriter writer)
             }
         }
 
-*/
+
         private void SendResponse(StreamWriter writer, string content, string contentType, HttpStatusCode statusCode = HttpStatusCode.OK)
         {
             writer.WriteLine($"HTTP/1.1 {(int)statusCode} {statusCode}");
