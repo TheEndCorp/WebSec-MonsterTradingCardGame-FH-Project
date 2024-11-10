@@ -122,9 +122,9 @@ namespace SemesterProjekt1
                        <input type='hidden' name='userID' value='{inventory.UserID}' />  
                        <input type='submit' value='Lobby beitreten'>  
                    </form>  
-                   <form method='post' action='/logout'>  
-                       <input type='submit' value='Logout'>  
-                   </form>  
+
+                   <button onclick='window.location.href=""/logout""'>Logout</button>
+
                </body>  
                </html>";
             return html;

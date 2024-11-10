@@ -1,14 +1,15 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Diagnostics;
-using System.Net;
 using System.Net.Sockets;
+using System.Net;
 using System.Security.Principal;
 using System.Text;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 using System.Net.WebSockets;
 using Microsoft.VisualStudio.TestPlatform.ObjectModel.DataCollection;
+using System.IO;
 
 namespace SemesterProjekt1
 {
@@ -25,10 +26,10 @@ namespace SemesterProjekt1
             }
 
             string localIPAddress = IsAdministrator() ? GetLocalIPAddress() : "127.0.0.1";
-            listener = new TcpListener(IPAddress.Parse(localIPAddress), 10000);
+            listener = new TcpListener(IPAddress.Parse(localIPAddress), 10001);
             listener.Start();
 
-            Console.WriteLine($"Server gestartet auf http://{localIPAddress}:10000/");
+            Console.WriteLine($"Server gestartet auf http://{localIPAddress}:10001/");
             PrintListeningAddresses();
 
             UserServiceRequest requester = new UserServiceRequest();
@@ -107,7 +108,7 @@ private static async Task HandleClientAsync(TcpClient client, UserServiceRequest
 
                                 if (requestParts.Length < 2)
                                 {
-                                    SendErrorResponse(networkStream, HttpStatusCode.BadRequest);
+                                    SendErrorResponse(networkStream);
                                     return;
                                 }
 
@@ -173,7 +174,7 @@ private static async Task HandleClientAsync(TcpClient client, UserServiceRequest
             catch (Exception ex)
             {
                 Console.WriteLine($"Error handling request: {ex.Message}");
-                SendErrorResponse(memoryStream, HttpStatusCode.InternalServerError);
+                SendErrorResponse(memoryStream);
             }
         }
 
@@ -312,9 +313,9 @@ private static async Task HandleClientAsync(TcpClient client, UserServiceRequest
 
 
 
-    private static void SendErrorResponse(Stream stream, HttpStatusCode statusCode)
+    private static void SendErrorResponse(Stream stream)
     {
-        string response = $"HTTP/1.1 {(int)statusCode} {statusCode}\r\nContent-Length: 0\r\n\r\n";
+        string response = $"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n";
         byte[] responseBytes = Encoding.UTF8.GetBytes(response);
         stream.Write(responseBytes, 0, responseBytes.Length);
         stream.Flush();  // Ensure data is sent immediately.

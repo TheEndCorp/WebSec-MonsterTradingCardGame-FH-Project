@@ -1,8 +1,7 @@
 ﻿using Microsoft.VisualStudio.TestPlatform.PlatformAbstractions.Interfaces;
 using System;
 using System.IO;
-using System.Net;
-using System.Net.Sockets;
+
 using System.Reflection.PortableExecutable;
 using System.Text;
 using System.Text.Json;
@@ -16,6 +15,19 @@ using System.Threading.Tasks;
 
 namespace SemesterProjekt1
 {
+
+    enum HttpStatusCode
+    {
+        OK = 200,
+        Created = 201,
+        BadRequest = 400,
+        Unauthorized = 401,
+        Conflict = 409,
+        InternalServerError = 500
+    }
+
+
+
     public class UserServiceRequest
     {
         public UserServiceHandler _userServiceHandler = new UserServiceHandler();
@@ -704,13 +716,21 @@ async Task HandleAddCardToDeckAsync(StreamReader reader, StreamWriter writer)
 
         private void SendErrorResponse(StreamWriter writer, HttpStatusCode statusCode)
         {
-            writer.WriteLine($"HTTP/1.1 {(int)statusCode} {statusCode}");
+            writer.WriteLine($"HTTP/1.1  {statusCode}");
             writer.WriteLine("Content-Length: 0");
-            writer.WriteLine();
             writer.Flush();
         }
 
        
+
+
+
+
+
+
+
+
+
 
 
     }
