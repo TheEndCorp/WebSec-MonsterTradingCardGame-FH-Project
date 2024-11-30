@@ -1,22 +1,12 @@
-﻿using Microsoft.VisualStudio.TestPlatform.PlatformAbstractions.Interfaces;
-using System;
-using System.IO;
-
-using System.Reflection.PortableExecutable;
-using System.Text;
+﻿using System.Text;
 using System.Text.Json;
-using System.Threading.Tasks;
 
-
-// 20 hours already Wasted from HTTPLISTENER -> TCP ANDWiwkndiunwaidon Day 3 Note of this shit 
-// 25 and nearly finished 
-
-
+// 20 hours already Wasted from HTTPLISTENER -> TCP ANDWiwkndiunwaidon Day 3 Note of this shit
+// 25 and nearly finished
 
 namespace SemesterProjekt1
 {
-
-    enum HttpStatusCode
+    internal enum HttpStatusCode
     {
         OK = 200,
         Created = 201,
@@ -26,41 +16,10 @@ namespace SemesterProjekt1
         InternalServerError = 500
     }
 
-
-
     public class UserServiceRequest
     {
-        public UserServiceHandler _userServiceHandler = new UserServiceHandler();
         private HTMLGEN _htmlgen = new HTMLGEN(new UserServiceHandler());
-
-        public async Task HandleRequestAsync(StreamReader request, StreamWriter response, string method, string path)
-        {
-            try
-            {
-
-
-                switch (method)
-                {
-                    case "GET":
-                        await HandleGetRequestAsync(request, response, path);
-                        break;
-                    case "POST":
-                        await HandlePostRequestAsync(request, response, path);
-                        break;
-                    default:
-                        response.WriteLine("HTTP/1.1 405 Method Not Allowed");
-                        response.WriteLine("Content-Length: 0");
-                        response.WriteLine();
-                        response.Flush();
-                        break;
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error handling request: {ex.Message}");
-            }
-        }
-
+        public UserServiceHandler _userServiceHandler = new UserServiceHandler();
 
         private async Task HandleGetRequestAsync(StreamReader request, StreamWriter response, string path1)
         {
@@ -71,23 +30,29 @@ namespace SemesterProjekt1
                     string htmlResponse = _htmlgen.GenerateOptionsPage(users.Count);
                     SendResponse(response, htmlResponse, "text/html");
                     break;
+
                 case "/users":
                     var allUsers = _userServiceHandler.GetAllUsers();
                     string jsonResponse = SerializeToJson(allUsers);
                     SendResponse(response, jsonResponse, "application/json");
                     break;
+
                 case string path when path1.StartsWith("/user/"):
                     await HandleGetUserByIdAsync(request, response, path1);
                     break;
+
                 case "/login":
-                           _htmlgen.SendLoginPage(response);
+                    _htmlgen.SendLoginPage(response);
                     break;
+
                 case "/lobby":
-                   // _htmlgen.SendLobbyPage(request, response);
+                    // _htmlgen.SendLobbyPage(request, response);
                     break;
+
                 case "/logout":
                     await HandleLogout(response);
                     break;
+
                 default:
                     response.WriteLine("HTTP/1.1 404 Not Found");
                     response.WriteLine("Content-Length: 0");
@@ -103,21 +68,27 @@ namespace SemesterProjekt1
                 case "/users":
                     await HandleAddUserAsync(request, response);
                     break;
+
                 case "/login":
                     await HandleLoginAsync(request, response);
                     break;
+
                 case "/sessions":
                     await HandleLoginAsyncCURL(request, response);
                     break;
+
                 case "/openpack":
-                  await HandleOpenCardPackAsync(request, response);
+                    await HandleOpenCardPackAsync(request, response);
                     break;
+
                 case "/inventory":
-                          await HandleBuyPacksAsync(request, response);
+                    await HandleBuyPacksAsync(request, response);
                     break;
+
                 case "/add-card-to-deck":
-                          await HandleAddCardToDeckAsync(request, response);
+                    await HandleAddCardToDeckAsync(request, response);
                     break;
+
                 default:
                     response.WriteLine("HTTP/1.1 404 Not Found");
                     response.WriteLine("Content-Length: 0");
@@ -153,9 +124,7 @@ namespace SemesterProjekt1
 
         private async Task HandleAddUserAsync(StreamReader request, StreamWriter response)
         {
-
             string requestBody = await ReadRequestBodyAsync(request, response);
-
 
             var user = DeserializeUser(requestBody);
             if (user != null && (IsValidInput(user.Username) && IsValidInput(user.Password)))
@@ -201,14 +170,11 @@ namespace SemesterProjekt1
                 response.WriteLine(responseContent);
                 response.Flush();
             }
-
-       
             else
             {
                 SendErrorResponse(response, HttpStatusCode.Unauthorized, "Invalid username or password");
             }
         }
-        
 
         private void SendErrorResponse(StreamWriter writer, HttpStatusCode statusCode, string message)
         {
@@ -220,21 +186,14 @@ namespace SemesterProjekt1
             writer.Flush();
         }
 
-
-
         private async Task HandleLoginAsyncCURL(StreamReader reader, StreamWriter writer)
         {
             if (!writer.BaseStream.CanWrite)
             { Console.WriteLine("Error"); }
 
-
-
             //////////////////////////////////////////////
             try
             {
-
-
-
                 var authenticatedUser = await IsIdentiyYesUser(reader, writer);
                 if (authenticatedUser != null)
                 {
@@ -263,7 +222,6 @@ namespace SemesterProjekt1
             }
         }
 
-
         private async Task HandleLogout(StreamWriter writer)
         {
             try
@@ -286,42 +244,34 @@ namespace SemesterProjekt1
             }
         }
 
-        
         private async Task HandleOpenCardPackAsync(StreamReader reader, StreamWriter writer)
         {
-
-
             var user = await IsIdentiyYesUserCookie(reader, writer);
 
-                if (user != null)
+            if (user != null)
+            {
+                if (user.Inventory.CardPacks.Count > 0)
                 {
-                    if (user.Inventory.CardPacks.Count > 0)
+                    for (int i = user.Inventory.CardPacks.Count - 1; i >= 0; i--)
                     {
-                        for (int i = user.Inventory.CardPacks.Count - 1; i >= 0; i--)
-                        {
-                            user.Inventory.OpenCardPack(user.Inventory.CardPacks[i]);
-                            user.Inventory.CardPacks.RemoveAt(i);
-                        }
+                        user.Inventory.OpenCardPack(user.Inventory.CardPacks[i]);
+                        user.Inventory.CardPacks.RemoveAt(i);
                     }
+                }
 
-                    string jsonResponse = SerializeToJson(user.Inventory.OwnedCards);
-                    writer.WriteLine("HTTP/1.1 200 OK");
-                    writer.WriteLine("Content-Type: application/json");
-                    writer.WriteLine($"Content-Length: {jsonResponse.Length}");
-                    writer.WriteLine();
-                    writer.WriteLine(jsonResponse);
-                    writer.Flush();
-
+                string jsonResponse = SerializeToJson(user.Inventory.OwnedCards);
+                writer.WriteLine("HTTP/1.1 200 OK");
+                writer.WriteLine("Content-Type: application/json");
+                writer.WriteLine($"Content-Length: {jsonResponse.Length}");
+                writer.WriteLine();
+                writer.WriteLine(jsonResponse);
+                writer.Flush();
             }
-                else
-                {
+            else
+            {
                 SendErrorResponse(writer, HttpStatusCode.Unauthorized, "Invalid at HandleOpenCard");
             }
-            }
-
-
-
-
+        }
 
         private async Task HandleBuyPacksAsync(StreamReader reader, StreamWriter writer)
         {
@@ -365,9 +315,7 @@ namespace SemesterProjekt1
             }
         }
 
-     
-
-async Task HandleAddCardToDeckAsync(StreamReader reader, StreamWriter writer)
+        private async Task HandleAddCardToDeckAsync(StreamReader reader, StreamWriter writer)
         {
             try
             {
@@ -376,20 +324,17 @@ async Task HandleAddCardToDeckAsync(StreamReader reader, StreamWriter writer)
 
                 if (user != null)
                 {
+                    var parameters = requestBodyString.Split('&');
+                    List<int> cardIndices = new List<int>();
 
-              
-               var  parameters = requestBodyString.Split('&');
-                                    List<int> cardIndices = new List<int>();
-                                  
-
-                                    foreach (var param in parameters)
-                                    {
-                                        string[] keyValue = param.Split('=');
-                                        if (keyValue[0] == "cardIndices" && int.TryParse(keyValue[1], out int index))
-                                        {
-                                            cardIndices.Add(index);
-                                        }
-                                    }
+                    foreach (var param in parameters)
+                    {
+                        string[] keyValue = param.Split('=');
+                        if (keyValue[0] == "cardIndices" && int.TryParse(keyValue[1], out int index))
+                        {
+                            cardIndices.Add(index);
+                        }
+                    }
 
                     if (cardIndices != null)
                     {
@@ -413,7 +358,6 @@ async Task HandleAddCardToDeckAsync(StreamReader reader, StreamWriter writer)
             }
         }
 
-
         private void SendResponse(StreamWriter writer, string content, string contentType, HttpStatusCode statusCode = HttpStatusCode.OK)
         {
             writer.WriteLine($"HTTP/1.1 {(int)statusCode} {statusCode}");
@@ -422,21 +366,13 @@ async Task HandleAddCardToDeckAsync(StreamReader reader, StreamWriter writer)
             writer.WriteLine();
             writer.Write(content);
             writer.Flush();
-
         }
-
 
         private void SendResponseWeb(StreamWriter writer, string content, string contentType, HttpStatusCode statusCode = HttpStatusCode.OK)
         {
-
             writer.Write(content);
             writer.Flush(); // Ensure the content is flushed to the stream
         }
-
-
-
-
-
 
         private User DeserializeUser(string json)
         {
@@ -448,7 +384,6 @@ async Task HandleAddCardToDeckAsync(StreamReader reader, StreamWriter writer)
         {
             return JsonSerializer.Serialize(obj);
         }
-
 
         private bool IsValidInput(string input)
         {
@@ -470,9 +405,9 @@ async Task HandleAddCardToDeckAsync(StreamReader reader, StreamWriter writer)
 
             return true;
         }
+
         private bool IsJson(string input)
         {
-
             input = input.Trim();
             Console.WriteLine(input);
             return input.StartsWith("{") && input.EndsWith("}") || input.StartsWith("[") && input.EndsWith("]");
@@ -538,7 +473,6 @@ async Task HandleAddCardToDeckAsync(StreamReader reader, StreamWriter writer)
             }
         }
 
-
         private async Task<User?> IsIdentiyYesUserCookie(StreamReader reader, StreamWriter writer)
         {
             if (!writer.BaseStream.CanWrite)
@@ -598,8 +532,6 @@ async Task HandleAddCardToDeckAsync(StreamReader reader, StreamWriter writer)
                 return null;
             }
         }
-
-
 
         private async Task<string> ReadRequestBodyAsync(StreamReader reader, StreamWriter writer)
         {
@@ -669,7 +601,6 @@ async Task HandleAddCardToDeckAsync(StreamReader reader, StreamWriter writer)
             }
             Console.BackgroundColor = ConsoleColor.Red;
             Console.WriteLine($"Request line: {requestLine}");
-     
 
             string? line;
             string? userDataCookie = null;
@@ -710,10 +641,6 @@ async Task HandleAddCardToDeckAsync(StreamReader reader, StreamWriter writer)
             return userDataCookie;
         }
 
-
-
-
-
         private void SendErrorResponse(StreamWriter writer, HttpStatusCode statusCode)
         {
             writer.WriteLine($"HTTP/1.1  {statusCode}");
@@ -721,17 +648,32 @@ async Task HandleAddCardToDeckAsync(StreamReader reader, StreamWriter writer)
             writer.Flush();
         }
 
-       
+        public async Task HandleRequestAsync(StreamReader request, StreamWriter response, string method, string path)
+        {
+            try
+            {
+                switch (method)
+                {
+                    case "GET":
+                        await HandleGetRequestAsync(request, response, path);
+                        break;
 
+                    case "POST":
+                        await HandlePostRequestAsync(request, response, path);
+                        break;
 
-
-
-
-
-
-
-
-
-
+                    default:
+                        response.WriteLine("HTTP/1.1 405 Method Not Allowed");
+                        response.WriteLine("Content-Length: 0");
+                        response.WriteLine();
+                        response.Flush();
+                        break;
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error handling request: {ex.Message}");
+            }
+        }
     }
 }

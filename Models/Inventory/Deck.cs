@@ -23,9 +23,6 @@ namespace SemesterProjekt1
             Cards = new List<Card>();
         }
 
-
-
-
         public bool AddCard(Card card)
         {
             if (Cards.Count >= MaxCards)

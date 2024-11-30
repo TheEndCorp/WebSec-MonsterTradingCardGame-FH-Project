@@ -66,66 +66,66 @@ namespace SemesterProjekt1
 
         public string GenerateInventoryHtml(Inventory inventory)
         {
-            string html = $@"  
-               <!DOCTYPE html>  
-               <html lang='en'>  
-               <head>  
-                   <meta charset='UTF-8'>  
-                   <title>Inventory</title>  
-               </head>  
-               <body>  
-                   <h1>Inventory</h1>  
-                   <h2>Owned Cards</h2>  
-                   <form method='post' action='/add-card-to-deck'>  
+            string html = $@"
+               <!DOCTYPE html>
+               <html lang='en'>
+               <head>
+                   <meta charset='UTF-8'>
+                   <title>Inventory</title>
+               </head>
+               <body>
+                   <h1>Inventory</h1>
+                   <h2>Owned Cards</h2>
+                   <form method='post' action='/add-card-to-deck'>
                        <ul>";
 
             foreach (var card in inventory.OwnedCards)
             {
                 int cardIndex = inventory.OwnedCards.IndexOf(card);
-                html += $@"  
-                       <li>  
-                           <input type='checkbox' name='cardIndices' value='{cardIndex}'>  
-                           {cardIndex} : {card.Name} - {card.Damage} Damage - {card.Element} - {card.Type}  
+                html += $@"
+                       <li>
+                           <input type='checkbox' name='cardIndices' value='{cardIndex}'>
+                           {cardIndex} : {card.Name} - {card.Damage} Damage - {card.Element} - {card.Type}
                        </li>";
             }
 
-            html += $@"  
-                       </ul>  
-                       <input type='hidden' name='userID' value='{inventory.UserID}' />  
-                       <input type='submit' value='Save to Deck'>  
-                   </form>  
-                   <h2>Cards in Deck</h2>  
+            html += $@"
+                       </ul>
+                       <input type='hidden' name='userID' value='{inventory.UserID}' />
+                       <input type='submit' value='Save to Deck'>
+                   </form>
+                   <h2>Cards in Deck</h2>
                    <ul>";
 
             foreach (var card in inventory.Deck.Cards)
             {
-                html += $@"  
-                       <li>  
-                           {card.Name} - {card.Damage} Damage - {card.Element} - {card.Type}  
+                html += $@"
+                       <li>
+                           {card.Name} - {card.Damage} Damage - {card.Element} - {card.Type}
                        </li>";
             }
 
-            html += $@"  
-                   </ul>  
-                   <h2>Money: {inventory.Money}</h2>  
-                   <form method='post' action='/openpack'>  
-                       <input type='hidden' name='userID' value='{inventory.UserID}' />  
-                       <input type='submit' value='Open Card Pack'>  
-                   </form>  
-                   <form method='post' action='/inventory'>  
-                       <input type='hidden' name='userID' value='{inventory.UserID}' />  
-                       <label for='Amount'>Amount:</label>  
-                       <input type='number' id='Amount' name='Amount' required><br>  
-                       <input type='submit' value='Buy Card Pack'>  
-                   </form>  
-                   <form id='joinLobbyForm' method='post' action='/join-lobby'>  
-                       <input type='hidden' name='userID' value='{inventory.UserID}' />  
-                       <input type='submit' value='Lobby beitreten'>  
-                   </form>  
+            html += $@"
+                   </ul>
+                   <h2>Money: {inventory.Money}</h2>
+                   <form method='post' action='/openpack'>
+                       <input type='hidden' name='userID' value='{inventory.UserID}' />
+                       <input type='submit' value='Open Card Pack'>
+                   </form>
+                   <form method='post' action='/inventory'>
+                       <input type='hidden' name='userID' value='{inventory.UserID}' />
+                       <label for='Amount'>Amount:</label>
+                       <input type='number' id='Amount' name='Amount' required><br>
+                       <input type='submit' value='Buy Card Pack'>
+                   </form>
+                   <form id='joinLobbyForm' method='post' action='/join-lobby'>
+                       <input type='hidden' name='userID' value='{inventory.UserID}' />
+                       <input type='submit' value='Lobby beitreten'>
+                   </form>
 
                    <button onclick='window.location.href=""/logout""'>Logout</button>
 
-               </body>  
+               </body>
                </html>";
             return html;
         }
@@ -135,13 +135,6 @@ namespace SemesterProjekt1
             string response = $"HTTP/1.1 200 OK\r\nContent-Type: {contentType}\r\nContent-Length: {content.Length}\r\n\r\n{content}";
             stream.Write(response);
             stream.Flush();
-
-
         }
-
-
-
-
-
     }
-    }
+}

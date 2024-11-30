@@ -1,9 +1,5 @@
-﻿using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Text.Json;
+﻿using System.Text.Json;
 using System.Text.Json.Serialization;
-
 
 namespace SemesterProjekt1
 {
@@ -30,7 +26,6 @@ namespace SemesterProjekt1
                 var users = JsonSerializer.Deserialize<List<User>>(json, options) ?? new List<User>();
                 foreach (var user in users)
                 {
-                   
                     foreach (var card in user.Inventory.OwnedCards)
                     {
                         if (card.InDeck)
@@ -43,7 +38,6 @@ namespace SemesterProjekt1
             }
             catch (JsonException ex)
             {
-                
                 throw new InvalidOperationException("Failed to deserialize users.", ex);
             }
         }
@@ -89,15 +83,19 @@ namespace SemesterProjekt1
                     case nameof(User.Id):
                         id = reader.GetInt32();
                         break;
+
                     case nameof(User.Username):
                         username = reader.GetString() ?? string.Empty;
                         break;
+
                     case nameof(User.Password):
                         password = reader.GetString() ?? string.Empty;
                         break;
+
                     case nameof(User.Inventory):
                         inventory = JsonSerializer.Deserialize<Inventory>(ref reader, options) ?? new Inventory(id);
                         break;
+
                     default:
                         throw new JsonException($"Unknown property: {propertyName}");
                 }

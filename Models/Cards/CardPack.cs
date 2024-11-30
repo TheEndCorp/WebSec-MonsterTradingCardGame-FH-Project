@@ -1,7 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text.Json.Serialization;
-
+﻿using System.Text.Json.Serialization;
 
 namespace SemesterProjekt1
 {
@@ -9,7 +6,7 @@ namespace SemesterProjekt1
     {
         private static readonly ThreadLocal<Random> _random = new ThreadLocal<Random>(() => new Random(Guid.NewGuid().GetHashCode()));
 
-        public new Rarity Rarity { get; set; } 
+        public new Rarity Rarity { get; set; }
         public int UserID { get; set; }
         public int Price { get; }
 
@@ -33,12 +30,6 @@ namespace SemesterProjekt1
             var rarities = Enum.GetValues(typeof(Rarity));
             var randomIndex = _random?.Value?.Next(rarities.Length) ?? 0;
             return (Rarity)(rarities.GetValue(randomIndex) ?? Rarity.Common);
-        }
-
-        public List<Card> OpenCardPack(int userId)
-        {
-            var cards = GenerateCards(5 * ((int)Rarity / 2), userId);
-            return cards;
         }
 
         private List<Card> GenerateCards(int numberOfCards, int userId)
@@ -74,8 +65,11 @@ namespace SemesterProjekt1
                 return new SpellCard(name, damage, element, rarity, userID);
             }
         }
+
+        public List<Card> OpenCardPack(int userId)
+        {
+            var cards = GenerateCards(5 * ((int)Rarity / 2), userId);
+            return cards;
+        }
     }
-
-
-
 }

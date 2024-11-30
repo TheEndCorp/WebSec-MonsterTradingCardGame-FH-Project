@@ -4,10 +4,8 @@ using System.Linq;
 using System.Text.Json.Serialization;
 using static Microsoft.ApplicationInsights.MetricDimensionNames.TelemetryContext;
 
-
 namespace SemesterProjekt1
 {
-
     public class Inventory
     {
         public List<Card> OwnedCards { get; set; }
@@ -36,7 +34,6 @@ namespace SemesterProjekt1
             this.UserID = userID;
             this.ELO = ELO;
         }
-
 
         public void AddCardToOwnedCards(Card card)
         {
@@ -67,8 +64,6 @@ namespace SemesterProjekt1
             }
         }
 
-
-
         public void OpenCardPack(CardPack cardPack)
         {
             var newCards = cardPack.OpenCardPack(UserID);
@@ -78,6 +73,4 @@ namespace SemesterProjekt1
             }
         }
     }
-
-    
 }

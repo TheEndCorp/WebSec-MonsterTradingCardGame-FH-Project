@@ -1,24 +1,18 @@
-﻿using System;
-using System.Collections.Concurrent;
-using System.Diagnostics;
-using System.Net.Sockets;
+﻿using System.Collections.Concurrent;
 using System.Net;
+using System.Net.Sockets;
+using System.Net.WebSockets;
 using System.Security.Principal;
 using System.Text;
-using System.Threading.Tasks;
-using System.Collections.Generic;
-using System.Net.WebSockets;
-using Microsoft.VisualStudio.TestPlatform.ObjectModel.DataCollection;
-using System.IO;
 
 namespace SemesterProjekt1
 {
-    class Program
+    internal class Program
     {
         private static TcpListener listener;
         private static ConcurrentDictionary<WebSocket, string?> _sockets = new ConcurrentDictionary<WebSocket, string?>();
 
-        static async Task Main()
+        private static async Task Main()
         {
             if (!IsAdministrator())
             {
@@ -71,12 +65,12 @@ namespace SemesterProjekt1
             }
         }
 
-private static async Task HandleClientAsync(TcpClient client, UserServiceRequest requester, SocketRequester socketRequester)
-{
-    try
-    {
-        using (var networkStream = client.GetStream())
+        private static async Task HandleClientAsync(TcpClient client, UserServiceRequest requester, SocketRequester socketRequester)
         {
+            try
+            {
+                using (var networkStream = client.GetStream())
+                {
                     // Check if the stream is usable
                     if (networkStream.CanRead && networkStream.CanWrite)
                     {
@@ -138,28 +132,22 @@ private static async Task HandleClientAsync(TcpClient client, UserServiceRequest
                                 }
                             }
                         }
+                    }
+                    else
+                    {
+                        Console.WriteLine("NetworkStream is not readable or writable.");
+                    }
+                }
             }
-            else
+            catch (IOException ioEx)
             {
-                Console.WriteLine("NetworkStream is not readable or writable.");
+                Console.WriteLine($"IO Error handling client: {ioEx.Message}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error handling client: {ex.Message}");
             }
         }
-    }
-    catch (IOException ioEx)
-    {
-        Console.WriteLine($"IO Error handling client: {ioEx.Message}");
-    }
-    catch (Exception ex)
-    {
-        Console.WriteLine($"Error handling client: {ex.Message}");
-    }
-}
-
-
-
-
-
-
 
         private static async Task HandleRequestAsync(MemoryStream memoryStream, NetworkStream networkStream, string method, string path, UserServiceRequest requester)
         {
@@ -180,18 +168,10 @@ private static async Task HandleClientAsync(TcpClient client, UserServiceRequest
 
         private static async Task HandleSocketRequestAsync(SocketRequester socketRequester, TcpClient client, string path)
         {
-            await socketRequester.HandleRequestAsync(path,client);
+            await socketRequester.HandleRequestAsync(path, client);
             await Task.Run(() => socketRequester._userServiceHandler._databaseHandler.SaveUsers(socketRequester._userServiceHandler._users));
             Console.WriteLine("Action");
         }
-
-
-
-
-
-
-
-
 
         private static async Task SendHttpResponseAsync(NetworkStream networkStream, string content, string contentType = "text/html")
         {
@@ -308,26 +288,13 @@ private static async Task HandleClientAsync(TcpClient client, UserServiceRequest
             }
             throw new Exception("Keine IPv4-Adresse im lokalen Netzwerk gefunden.");
         }
-   
 
-
-
-
-    private static void SendErrorResponse(Stream stream)
-    {
-        string response = $"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n";
-        byte[] responseBytes = Encoding.UTF8.GetBytes(response);
-        stream.Write(responseBytes, 0, responseBytes.Length);
-        stream.Flush();  // Ensure data is sent immediately.
-
-        }   
-
-
- }
-
-
-
-
-
-
+        private static void SendErrorResponse(Stream stream)
+        {
+            string response = $"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n";
+            byte[] responseBytes = Encoding.UTF8.GetBytes(response);
+            stream.Write(responseBytes, 0, responseBytes.Length);
+            stream.Flush();  // Ensure data is sent immediately.
+        }
+    }
 }

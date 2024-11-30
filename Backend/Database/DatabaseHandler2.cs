@@ -1,13 +1,5 @@
-
-using System;
-using System.Collections.Generic;
-using SQLitePCL;
-using System.IO;
-using System.Text.Json;
-using System.Text.Json.Serialization;
 using Microsoft.Data.Sqlite;
 using Npgsql;
-using static SemesterProjekt1.CardTypes;
 
 namespace SemesterProjekt1
 {
@@ -87,7 +79,7 @@ namespace SemesterProjekt1
                         Username TEXT NOT NULL,
                         Password TEXT NOT NULL,
                         Money INTEGER,
-                        ELO INTEGER 
+                        ELO INTEGER
                     );";
             using (var command = new NpgsqlCommand(createUsersTable, connection))
             {
@@ -132,7 +124,7 @@ namespace SemesterProjekt1
                         Username TEXT NOT NULL,
                         Password TEXT NOT NULL,
                         Money INTEGER,
-                        ELO INTEGER 
+                        ELO INTEGER
                     );";
             using (var command = new SqliteCommand(createUsersTable, connection))
             {
@@ -167,54 +159,6 @@ namespace SemesterProjekt1
             {
                 command.ExecuteNonQuery();
             }
-        }
-
-        public List<User> LoadUsers()
-        {
-            var users = new List<User>();
-            if (_usePostgres)
-            {
-                using (var connection = new NpgsqlConnection(_postgresConnectionString))
-                {
-                    connection.Open();
-                    string selectUsers = "SELECT * FROM Users;";
-                    using (var command = new NpgsqlCommand(selectUsers, connection))
-                    using (var reader = command.ExecuteReader())
-                    {
-                        while (reader.Read())
-                        {
-                            int id = reader.GetInt32(0);
-                            string username = reader.GetString(1);
-                            string password = reader.GetString(2);
-
-                            var inventory = LoadInventory(id);
-                            users.Add(new User(id, username, password, inventory));
-                        }
-                    }
-                }
-            }
-            else
-            {
-                using (var connection = new SqliteConnection(_sqliteConnectionString))
-                {
-                    connection.Open();
-                    string selectUsers = "SELECT * FROM Users;";
-                    using (var command = new SqliteCommand(selectUsers, connection))
-                    using (var reader = command.ExecuteReader())
-                    {
-                        while (reader.Read())
-                        {
-                            int id = reader.GetInt32(0);
-                            string username = reader.GetString(1);
-                            string password = reader.GetString(2);
-
-                            var inventory = LoadInventory(id);
-                            users.Add(new User(id, username, password, inventory));
-                        }
-                    }
-                }
-            }
-            return users;
         }
 
         private Inventory LoadInventory(int userId)
@@ -329,71 +273,6 @@ namespace SemesterProjekt1
                 }
             }
             return inventory;
-        }
-
-        public void SaveUsers(List<User> users)
-        {
-            if (_usePostgres)
-            {
-                using (var connection = new NpgsqlConnection(_postgresConnectionString))
-                {
-                    connection.Open();
-                    using (var transaction = connection.BeginTransaction())
-                    {
-                        foreach (var user in users)
-                        {
-                            string insertOrUpdateUser = @"
-                                    INSERT INTO Users (Id, Username, Password, Money, Elo)
-                                    VALUES (@Id, @Username, @Password, @Money, @Elo)
-                                    ON CONFLICT (Id) DO UPDATE
-                                    SET Username = EXCLUDED.Username,
-                                        Password = EXCLUDED.Password,
-                                        Money = EXCLUDED.Money,
-                                        Elo = EXCLUDED.Elo;";
-                            using (var command = new NpgsqlCommand(insertOrUpdateUser, connection, transaction))
-                            {
-                                command.Parameters.AddWithValue("@Id", user.Id);
-                                command.Parameters.AddWithValue("@Username", user.Username);
-                                command.Parameters.AddWithValue("@Password", user.Password);
-                                command.Parameters.AddWithValue("@Money", user.Inventory.Money);
-                                command.Parameters.AddWithValue("@Elo", user.Inventory.ELO);
-                                command.ExecuteNonQuery();
-                            }
-
-                            SaveInventory(user.Inventory, connection, transaction);
-                        }
-                        transaction.Commit();
-                    }
-                }
-            }
-            else
-            {
-                using (var connection = new SqliteConnection(_sqliteConnectionString))
-                {
-                    connection.Open();
-                    using (var transaction = connection.BeginTransaction())
-                    {
-                        foreach (var user in users)
-                        {
-                            string insertOrUpdateUser = @"
-                                    INSERT OR REPLACE INTO Users (Id, Username, Password, Money, Elo)
-                                    VALUES (@Id, @Username, @Password, @Money, @Elo);";
-                            using (var command = new SqliteCommand(insertOrUpdateUser, connection, transaction))
-                            {
-                                command.Parameters.AddWithValue("@Id", user.Id);
-                                command.Parameters.AddWithValue("@Username", user.Username);
-                                command.Parameters.AddWithValue("@Password", user.Password);
-                                command.Parameters.AddWithValue("@Money", user.Inventory.Money);
-                                command.Parameters.AddWithValue("@Elo", user.Inventory.ELO);
-                                command.ExecuteNonQuery();
-                            }
-
-                            SaveInventory(user.Inventory, connection, transaction);
-                        }
-                        transaction.Commit();
-                    }
-                }
-            }
         }
 
         private void SaveInventory(Inventory inventory, NpgsqlConnection connection, NpgsqlTransaction transaction)
@@ -543,6 +422,119 @@ namespace SemesterProjekt1
                 command.Parameters.AddWithValue("@Name", name);
                 command.Parameters.AddWithValue("@UserID", userId);
                 return Convert.ToInt32(command.ExecuteScalar()) > 0;
+            }
+        }
+
+        public List<User> LoadUsers()
+        {
+            var users = new List<User>();
+            if (_usePostgres)
+            {
+                using (var connection = new NpgsqlConnection(_postgresConnectionString))
+                {
+                    connection.Open();
+                    string selectUsers = "SELECT * FROM Users;";
+                    using (var command = new NpgsqlCommand(selectUsers, connection))
+                    using (var reader = command.ExecuteReader())
+                    {
+                        while (reader.Read())
+                        {
+                            int id = reader.GetInt32(0);
+                            string username = reader.GetString(1);
+                            string password = reader.GetString(2);
+
+                            var inventory = LoadInventory(id);
+                            users.Add(new User(id, username, password, inventory));
+                        }
+                    }
+                }
+            }
+            else
+            {
+                using (var connection = new SqliteConnection(_sqliteConnectionString))
+                {
+                    connection.Open();
+                    string selectUsers = "SELECT * FROM Users;";
+                    using (var command = new SqliteCommand(selectUsers, connection))
+                    using (var reader = command.ExecuteReader())
+                    {
+                        while (reader.Read())
+                        {
+                            int id = reader.GetInt32(0);
+                            string username = reader.GetString(1);
+                            string password = reader.GetString(2);
+
+                            var inventory = LoadInventory(id);
+                            users.Add(new User(id, username, password, inventory));
+                        }
+                    }
+                }
+            }
+            return users;
+        }
+
+        public void SaveUsers(List<User> users)
+        {
+            if (_usePostgres)
+            {
+                using (var connection = new NpgsqlConnection(_postgresConnectionString))
+                {
+                    connection.Open();
+                    using (var transaction = connection.BeginTransaction())
+                    {
+                        foreach (var user in users)
+                        {
+                            string insertOrUpdateUser = @"
+                                    INSERT INTO Users (Id, Username, Password, Money, Elo)
+                                    VALUES (@Id, @Username, @Password, @Money, @Elo)
+                                    ON CONFLICT (Id) DO UPDATE
+                                    SET Username = EXCLUDED.Username,
+                                        Password = EXCLUDED.Password,
+                                        Money = EXCLUDED.Money,
+                                        Elo = EXCLUDED.Elo;";
+                            using (var command = new NpgsqlCommand(insertOrUpdateUser, connection, transaction))
+                            {
+                                command.Parameters.AddWithValue("@Id", user.Id);
+                                command.Parameters.AddWithValue("@Username", user.Username);
+                                command.Parameters.AddWithValue("@Password", user.Password);
+                                command.Parameters.AddWithValue("@Money", user.Inventory.Money);
+                                command.Parameters.AddWithValue("@Elo", user.Inventory.ELO);
+                                command.ExecuteNonQuery();
+                            }
+
+                            SaveInventory(user.Inventory, connection, transaction);
+                        }
+                        transaction.Commit();
+                    }
+                }
+            }
+            else
+            {
+                using (var connection = new SqliteConnection(_sqliteConnectionString))
+                {
+                    connection.Open();
+                    using (var transaction = connection.BeginTransaction())
+                    {
+                        foreach (var user in users)
+                        {
+                            string insertOrUpdateUser = @"
+                                    INSERT OR REPLACE INTO Users (Id, Username, Password, Money, Elo)
+                                    VALUES (@Id, @Username, @Password, @Money, @Elo);";
+                            using (var command = new SqliteCommand(insertOrUpdateUser, connection, transaction))
+                            {
+                                command.Parameters.AddWithValue("@Id", user.Id);
+                                command.Parameters.AddWithValue("@Username", user.Username);
+                                command.Parameters.AddWithValue("@Password", user.Password);
+                                command.Parameters.AddWithValue("@Money", user.Inventory.Money);
+                                command.Parameters.AddWithValue("@Elo", user.Inventory.ELO);
+                                command.ExecuteNonQuery();
+                            }
+
+                            SaveInventory(user.Inventory, connection, transaction);
+                        }
+                        transaction.Commit();
+                    }
+                }
             }
         }
     }

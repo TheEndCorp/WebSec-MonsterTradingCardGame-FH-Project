@@ -1,18 +1,12 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.Net;
-
-
+﻿using System.Net;
 
 namespace SemesterProjekt1
 {
-
     public class UserServiceHandler
     {
+        private List<User> _lobby;
         public List<User> _users;
         public DatabaseHandler2 _databaseHandler;
-        private List<User> _lobby;
 
         public UserServiceHandler()
         {
@@ -37,6 +31,36 @@ namespace SemesterProjekt1
                 };
         }
 
+        private void SendResponse(HttpListenerResponse response, string content, string contentType)
+        {
+            byte[] buffer = System.Text.Encoding.UTF8.GetBytes(content);
+            response.ContentLength64 = buffer.Length;
+            response.ContentType = contentType;
+            response.OutputStream.Write(buffer, 0, buffer.Length);
+            response.OutputStream.Close();
+        }
+
+        private bool IsValidInput(string input)
+        {
+            // Überprüfen Sie auf schädliche Zeichen oder Muster
+            string[] blackList = { "'", "\"", "--", ";", "/*", "*/", "xp_" };
+            foreach (var item in blackList)
+            {
+                if (input.Contains(item))
+                {
+                    return false;
+                }
+            }
+
+            // Überprüfen Sie die Länge der Eingabe
+            if (input.Length > 50) // Beispielgrenze, anpassen nach Bedarf
+            {
+                return false;
+            }
+
+            return true;
+        }
+
         public List<User> GetAllUsers()
         {
             return _users;
@@ -53,11 +77,11 @@ namespace SemesterProjekt1
             {
                 throw new InvalidOperationException("Ein Benutzer mit diesem Benutzernamen existiert bereits.");
             }
- 
+
             if (!IsValidInput(user.Username) || !IsValidInput(user.Password))
-                {
-                    throw new InvalidOperationException("Pffff Buffer Overload Detected.");
-                }
+            {
+                throw new InvalidOperationException("Pffff Buffer Overload Detected.");
+            }
 
             _users.Add(user);
             _databaseHandler.SaveUsers(_users);
@@ -125,17 +149,6 @@ namespace SemesterProjekt1
             return user;
         }
 
-
-
-        private void SendResponse(HttpListenerResponse response, string content, string contentType)
-        {
-            byte[] buffer = System.Text.Encoding.UTF8.GetBytes(content);
-            response.ContentLength64 = buffer.Length;
-            response.ContentType = contentType;
-            response.OutputStream.Write(buffer, 0, buffer.Length);
-            response.OutputStream.Close();
-        }
-
         public void SaveDeck(int userId, List<Card> deck)
         {
             var user = GetUserById(userId);
@@ -168,28 +181,5 @@ namespace SemesterProjekt1
             }
             return user;
         }
-        private bool IsValidInput(string input)
-        {
-            // Überprüfen Sie auf schädliche Zeichen oder Muster
-            string[] blackList = { "'", "\"", "--", ";", "/*", "*/", "xp_" };
-            foreach (var item in blackList)
-            {
-                if (input.Contains(item))
-                {
-                    return false;
-                }
-            }
-
-            // Überprüfen Sie die Länge der Eingabe
-            if (input.Length > 50) // Beispielgrenze, anpassen nach Bedarf
-            {
-                return false;
-            }
-
-            return true;
-        }
-
-
-
     }
 }

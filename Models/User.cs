@@ -4,40 +4,15 @@ using System.Text.Json.Serialization;
 
 namespace SemesterProjekt1
 {
-
     public class User
     {
         private int _id;
+
         private string _username;
+
         private string _password;
+
         private Inventory _Inventory;
-
-
-
-
-
-        public User(int id, string username, string password)
-        {
-            this._id = id;
-            this._username = username;
-            this._password = password;
-            this._Inventory = new Inventory(this._id);
-        }
-        [JsonConstructor]
-        public User(int id, string username, string password, Inventory inventory)
-        {
-            this._id = id;
-            this._username = username;
-            this._password = password;
-            this._Inventory = inventory ?? new Inventory(this._id);
-
-        }
-
-
-        ~User()
-        {
-            Console.WriteLine($"User {_username}, {_password} wird zerstört.");
-        }
 
         public int Id
         {
@@ -63,7 +38,26 @@ namespace SemesterProjekt1
             set { _Inventory = value; }
         }
 
+        ~User()
+        {
+            Console.WriteLine($"User {_username}, {_password} wird zerstört.");
+        }
 
+        public User(int id, string username, string password)
+        {
+            this._id = id;
+            this._username = username;
+            this._password = password;
+            this._Inventory = new Inventory(this._id);
+        }
+
+        [JsonConstructor]
+        public User(int id, string username, string password, Inventory inventory)
+        {
+            this._id = id;
+            this._username = username;
+            this._password = password;
+            this._Inventory = inventory ?? new Inventory(this._id);
+        }
     }
-
 }
