@@ -26,38 +26,55 @@ namespace SemesterProjekt1
             switch (path1)
             {
                 case "/":
-                    var users = _userServiceHandler.GetAllUsers();
-                    string htmlResponse = _htmlgen.GenerateOptionsPage(users.Count);
-                    SendResponse(response, htmlResponse, "text/html");
-                    break;
-
+                    {
+                        var users = _userServiceHandler.GetAllUsers();
+                        string htmlResponse = _htmlgen.GenerateOptionsPage(users.Count);
+                        SendResponse(response, htmlResponse, "text/html");
+                        break;
+                    }
                 case "/users":
-                    var allUsers = _userServiceHandler.GetAllUsers();
-                    string jsonResponse = SerializeToJson(allUsers);
-                    SendResponse(response, jsonResponse, "application/json");
-                    break;
-
+                    {
+                        var allUsers = _userServiceHandler.GetAllUsers();
+                        string jsonResponse = SerializeToJson(allUsers);
+                        SendResponse(response, jsonResponse, "application/json");
+                        break;
+                    }
                 case string path when path1.StartsWith("/user/"):
-                    await HandleGetUserByIdAsync(request, response, path1);
-                    break;
-
+                    {
+                        await HandleGetUserByIdAsync(request, response, path1);
+                        break;
+                    }
                 case "/login":
-                    _htmlgen.SendLoginPage(response);
-                    break;
-
+                    {
+                        _htmlgen.SendLoginPage(response);
+                        break;
+                    }
+                case "/scoreboard":
+                    {
+                        var allUsers = _userServiceHandler.GetAllUsers();
+                        var sortedUsers = allUsers.OrderByDescending(user => user.Inventory.ELO)
+                                                  .Select(user => new { user.Username, user.Inventory.ELO });
+                        string jsonResponse = SerializeToJson(sortedUsers);
+                        SendResponse(response, jsonResponse, "application/json");
+                        break;
+                    }
                 case "/lobby":
-                    // _htmlgen.SendLobbyPage(request, response);
-                    break;
-
+                    {
+                        // _htmlgen.SendLobbyPage(request, response);
+                        break;
+                    }
                 case "/logout":
-                    await HandleLogout(response);
-                    break;
-
+                    {
+                        await HandleLogout(response);
+                        break;
+                    }
                 default:
-                    response.WriteLine("HTTP/1.1 404 Not Found");
-                    response.WriteLine("Content-Length: 0");
-                    response.WriteLine();
-                    break;
+                    {
+                        response.WriteLine("HTTP/1.1 404 Not Found");
+                        response.WriteLine("Content-Length: 0");
+                        response.WriteLine();
+                        break;
+                    }
             }
         }
 
