@@ -1,5 +1,7 @@
-﻿using System.Text;
+﻿using System.Globalization;
+using System.Text;
 using System.Text.Json;
+using System.Transactions;
 
 // 20 hours already Wasted from HTTPLISTENER -> TCP ANDWiwkndiunwaidon Day 3 Note of this shit
 // 25 and nearly finished
@@ -68,6 +70,9 @@ namespace SemesterProjekt1
                         await HandleLogout(response);
                         break;
                     }
+
+                /////////////// CURL Functions
+
                 default:
                     {
                         response.WriteLine("HTTP/1.1 404 Not Found");
@@ -90,10 +95,6 @@ namespace SemesterProjekt1
                     await HandleLoginAsync(request, response);
                     break;
 
-                case "/sessions":
-                    await HandleLoginAsyncCURL(request, response);
-                    break;
-
                 case "/openpack":
                     await HandleOpenCardPackAsync(request, response);
                     break;
@@ -104,6 +105,16 @@ namespace SemesterProjekt1
 
                 case "/add-card-to-deck":
                     await HandleAddCardToDeckAsync(request, response);
+                    break;
+
+                /////////////// CURL Functions
+
+                case "/sessions":
+                    await HandleLoginAsyncCURL(request, response);
+                    break;
+
+                case "/transactions/packages":
+                    await HandleBuyPacksCURLAsync(request, response);
                     break;
 
                 default:
@@ -332,6 +343,37 @@ namespace SemesterProjekt1
             }
         }
 
+        private async Task HandleBuyPacksCURLAsync(StreamReader reader, StreamWriter writer)
+        {
+            var user = await IsIdentiyYesUserCookie(reader, writer);
+
+            if (user != null)
+            {
+                int amount = 1;
+
+                if (user.Inventory.Money < 5)
+                {
+                    SendErrorResponse(writer, HttpStatusCode.BadRequest, "Not enough money.");
+                    return;
+                }
+
+                user.Inventory.AddCardPack(new CardPack(user.Id), amount);
+                _userServiceHandler.UpdateUser(user.Id, user);
+                string jsonResponse = SerializeToJson(new { message = "Packs bought successfully" });
+
+                writer.WriteLine("HTTP/1.1 200 OK");
+                writer.WriteLine("Content-Type: application/json");
+                writer.WriteLine($"Content-Length: {jsonResponse.Length}");
+                writer.WriteLine();
+                writer.WriteLine(jsonResponse);
+                writer.Flush();
+            }
+            else
+            {
+                SendErrorResponse(writer, HttpStatusCode.Unauthorized, "Invalid username or password.");
+            }
+        }
+
         private async Task HandleAddCardToDeckAsync(StreamReader reader, StreamWriter writer)
         {
             try
@@ -468,9 +510,11 @@ namespace SemesterProjekt1
             }
             else
             {
-                var formData = System.Web.HttpUtility.ParseQueryString(requestBodyString);
-                username = formData["Username"];
-                password = formData["Password"];
+                var formData = requestBodyString.Split('&')
+                    .Select(part => part.Split('='))
+                    .ToDictionary(split => split[0], split => split.Length > 1 ? split[1] : string.Empty);
+                username = formData.ContainsKey("Username") ? formData["Username"] : null;
+                password = formData.ContainsKey("Password") ? formData["Password"] : null;
             }
 
             if (username == null || password == null)
@@ -528,9 +572,11 @@ namespace SemesterProjekt1
             }
             else
             {
-                var formData = System.Web.HttpUtility.ParseQueryString(requestBodyString);
-                username = formData["Username"];
-                password = formData["Password"];
+                var formData = requestBodyString.Split('&')
+                    .Select(part => part.Split('='))
+                    .ToDictionary(split => split[0], split => split.Length > 1 ? split[1] : string.Empty);
+                username = formData.ContainsKey("Username") ? formData["Username"] : null;
+                password = formData.ContainsKey("Password") ? formData["Password"] : null;
             }
 
             if (username == null || password == null)
@@ -637,6 +683,21 @@ namespace SemesterProjekt1
                             // Capture everything after "userData="
                             userDataCookie = trimmedCookie.Substring("userData=".Length);
                             break;
+                        }
+                    }
+                }
+                else if (line.StartsWith("Authorization: Bearer"))
+                {
+                    var parts = line.Split(' ');
+                    if (parts.Length == 3)
+                    {
+                        var tokenParts = parts[2].Split('-');
+                        if (tokenParts.Length == 2 && tokenParts[1] == "mtcgToken")
+                        {
+                            string username = tokenParts[0];
+                            Console.WriteLine($"Extracted Username: {username}");
+                            var user1 = _userServiceHandler.GetUserByName(username);
+                            userDataCookie = $"{{\"Username\":\"{user1.Username}\",\"Password\":\"{user1.Password}\"}}";
                         }
                     }
                 }
