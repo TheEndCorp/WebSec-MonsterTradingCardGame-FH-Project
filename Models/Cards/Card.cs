@@ -4,6 +4,7 @@ namespace SemesterProjekt1
 {
     public abstract class Card : CardTypes
     {
+        public long ID { get; set; }
         public string Name { get; set; }
         public int Damage { get; set; }
         public ElementType Element { get; set; }
@@ -14,6 +15,7 @@ namespace SemesterProjekt1
 
         public Card()
         {
+            ID = 0;
             Name = string.Empty;
             Damage = 0;
             Element = ElementType.Normal;
@@ -23,8 +25,9 @@ namespace SemesterProjekt1
             UserID = 0;
         }
 
-        public Card(string name, int damage, ElementType element, CardType type, Rarity rarityType, int userID)
+        public Card(long ID, string name, int damage, ElementType element, CardType type, Rarity rarityType, int userID)
         {
+            this.ID = ID;
             this.Name = name;
             this.Damage = damage * (int)rarityType;
             this.Element = element;
@@ -35,8 +38,9 @@ namespace SemesterProjekt1
         }
 
         [JsonConstructor]
-        public Card(string name, int damage, ElementType element, CardType type, Rarity rarityType, bool inDeck, int userID)
+        public Card(long ID, string name, int damage, ElementType element, CardType type, Rarity rarityType, bool inDeck, int userID)
         {
+            this.ID = ID;
             this.Name = name;
             this.Damage = damage;
             this.Element = element;
@@ -60,13 +64,13 @@ namespace SemesterProjekt1
     public class MonsterCard : Card
     {
         [JsonConstructor]
-        public MonsterCard(string name, int damage, ElementType element, Rarity rarityType, bool inDeck, int userID)
-            : base(name, damage, element, CardType.Monster, rarityType, inDeck, userID)
+        public MonsterCard(long ID, string name, int damage, ElementType element, Rarity rarityType, bool inDeck, int userID)
+            : base(ID, name, damage, element, CardType.Monster, rarityType, inDeck, userID)
         {
         }
 
-        public MonsterCard(string name, int damage, ElementType element, Rarity rarityType, int userID)
-    : base(name, damage, element, CardType.Monster, rarityType, userID)
+        public MonsterCard(long ID, string name, int damage, ElementType element, Rarity rarityType, int userID)
+    : base(ID, name, damage, element, CardType.Monster, rarityType, userID)
         {
         }
     }
@@ -74,13 +78,13 @@ namespace SemesterProjekt1
     public class SpellCard : Card
     {
         [JsonConstructor]
-        public SpellCard(string name, int damage, ElementType element, Rarity rarityType, bool inDeck, int userID)
-            : base(name, damage, element, CardType.Spell, rarityType, inDeck, userID)
+        public SpellCard(long ID, string name, int damage, ElementType element, Rarity rarityType, bool inDeck, int userID)
+            : base(ID, name, damage, element, CardType.Spell, rarityType, inDeck, userID)
         {
         }
 
-        public SpellCard(string name, int damage, ElementType element, Rarity rarityType, int userID)
-    : base(name, damage, element, CardType.Spell, rarityType, userID)
+        public SpellCard(long ID, string name, int damage, ElementType element, Rarity rarityType, int userID)
+    : base(ID, name, damage, element, CardType.Spell, rarityType, userID)
         {
         }
     }

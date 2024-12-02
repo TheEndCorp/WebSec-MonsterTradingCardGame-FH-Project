@@ -124,6 +124,7 @@ namespace SemesterProjekt1
             {
                 JsonElement root = doc.RootElement;
 
+                long id = root.GetProperty(nameof(Card.ID)).GetInt64();
                 string name = root.GetProperty(nameof(Card.Name)).GetString();
                 int damage = root.GetProperty(nameof(Card.Damage)).GetInt32();
                 ElementType element = (ElementType)root.GetProperty(nameof(Card.Element)).GetInt32();
@@ -134,11 +135,11 @@ namespace SemesterProjekt1
 
                 if (type == CardType.Spell)
                 {
-                    return new SpellCard(name, damage, (CardTypes.ElementType)element, (CardTypes.Rarity)rarityType, inDeck, userID);
+                    return new SpellCard(id, name, damage, (CardTypes.ElementType)element, (CardTypes.Rarity)rarityType, inDeck, userID);
                 }
                 else
                 {
-                    return new MonsterCard(name, damage, (CardTypes.ElementType)element, (CardTypes.Rarity)rarityType, inDeck, userID);
+                    return new MonsterCard(id, name, damage, (CardTypes.ElementType)element, (CardTypes.Rarity)rarityType, inDeck, userID);
                 }
             }
         }
@@ -146,6 +147,7 @@ namespace SemesterProjekt1
         public override void Write(Utf8JsonWriter writer, Card value, JsonSerializerOptions options)
         {
             writer.WriteStartObject();
+            writer.WriteNumber(nameof(Card.ID), value.ID);
             writer.WriteString(nameof(Card.Name), value.Name);
             writer.WriteNumber(nameof(Card.Damage), value.Damage);
             writer.WriteNumber(nameof(Card.Element), (int)value.Element);

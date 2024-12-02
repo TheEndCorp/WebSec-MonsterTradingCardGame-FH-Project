@@ -37,7 +37,7 @@ namespace SemesterProjekt1
 
         public void AddCardToOwnedCards(Card card)
         {
-            if (!OwnedCards.Any(c => c.Name == card.Name))
+            if (!OwnedCards.Any(c => c.ID == card.ID))
             {
                 OwnedCards.Add(card);
             }

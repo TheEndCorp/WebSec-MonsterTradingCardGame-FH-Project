@@ -120,7 +120,7 @@ namespace SemesterProjekt1
         {
             string createUsersTable = @"
                     CREATE TABLE IF NOT EXISTS Users (
-                        Id INTEGER PRIMARY KEY,
+                        Id INTEGER PRIMARY KEY AUTOINCREMENT,
                         Username TEXT NOT NULL,
                         Password TEXT NOT NULL,
                         Money INTEGER,
@@ -177,6 +177,7 @@ namespace SemesterProjekt1
                         {
                             while (reader.Read())
                             {
+                                long id = reader.GetInt64(0);
                                 string name = reader.GetString(1);
                                 int damage = reader.GetInt32(2);
                                 ElementType element = (ElementType)reader.GetInt32(3);
@@ -187,11 +188,11 @@ namespace SemesterProjekt1
                                 Card card;
                                 if (type == CardType.Spell)
                                 {
-                                    card = new SpellCard(name, damage, (CardTypes.ElementType)element, (CardTypes.Rarity)rarityType, inDeck, userId);
+                                    card = new SpellCard(id, name, damage, (CardTypes.ElementType)element, (CardTypes.Rarity)rarityType, inDeck, userId);
                                 }
                                 else
                                 {
-                                    card = new MonsterCard(name, damage, (CardTypes.ElementType)element, (CardTypes.Rarity)rarityType, inDeck, userId);
+                                    card = new MonsterCard(id, name, damage, (CardTypes.ElementType)element, (CardTypes.Rarity)rarityType, inDeck, userId);
                                 }
 
                                 inventory.AddCardToOwnedCards(card);
@@ -231,6 +232,7 @@ namespace SemesterProjekt1
                         {
                             while (reader.Read())
                             {
+                                long id = reader.GetInt64(0);
                                 string name = reader.GetString(1);
                                 int damage = reader.GetInt32(2);
                                 ElementType element = (ElementType)reader.GetInt32(3);
@@ -241,11 +243,11 @@ namespace SemesterProjekt1
                                 Card card;
                                 if (type == CardType.Spell)
                                 {
-                                    card = new SpellCard(name, damage, (CardTypes.ElementType)element, (CardTypes.Rarity)rarityType, inDeck, userId);
+                                    card = new SpellCard(id, name, damage, (CardTypes.ElementType)element, (CardTypes.Rarity)rarityType, inDeck, userId);
                                 }
                                 else
                                 {
-                                    card = new MonsterCard(name, damage, (CardTypes.ElementType)element, (CardTypes.Rarity)rarityType, inDeck, userId);
+                                    card = new MonsterCard(id, name, damage, (CardTypes.ElementType)element, (CardTypes.Rarity)rarityType, inDeck, userId);
                                 }
 
                                 inventory.AddCardToOwnedCards(card);
@@ -275,88 +277,25 @@ namespace SemesterProjekt1
             return inventory;
         }
 
-        private void SaveInventory(Inventory inventory, NpgsqlConnection connection, NpgsqlTransaction transaction)
-        {
-            foreach (var card in inventory.OwnedCards)
-            {
-                if (CardExists(card.Name, card.UserID, connection, transaction))
-                {
-                    string updateCard = @"
-                            UPDATE Cards
-                            SET Damage = @Damage, Element = @Element, Type = @Type, RarityType = @RarityType, InDeck = @InDeck
-                            WHERE Name = @Name AND UserID = @UserID;";
-                    using (var command = new NpgsqlCommand(updateCard, connection, transaction))
-                    {
-                        command.Parameters.AddWithValue("@Damage", card.Damage);
-                        command.Parameters.AddWithValue("@Element", (int)card.Element);
-                        command.Parameters.AddWithValue("@Type", (int)card.Type);
-                        command.Parameters.AddWithValue("@RarityType", (int)card.RarityType);
-                        command.Parameters.AddWithValue("@InDeck", card.InDeck);
-                        command.Parameters.AddWithValue("@Name", card.Name);
-                        command.Parameters.AddWithValue("@UserID", card.UserID);
-                        command.ExecuteNonQuery();
-                    }
-                }
-                else
-                {
-                    string insertCard = @"
-                            INSERT INTO Cards (Name, Damage, Element, Type, RarityType, InDeck, UserID)
-                            VALUES (@Name, @Damage, @Element, @Type, @RarityType, @InDeck, @UserID);";
-                    using (var command = new NpgsqlCommand(insertCard, connection, transaction))
-                    {
-                        command.Parameters.AddWithValue("@Name", card.Name);
-                        command.Parameters.AddWithValue("@Damage", card.Damage);
-                        command.Parameters.AddWithValue("@Element", (int)card.Element);
-                        command.Parameters.AddWithValue("@Type", (int)card.Type);
-                        command.Parameters.AddWithValue("@RarityType", (int)card.RarityType);
-                        command.Parameters.AddWithValue("@InDeck", card.InDeck);
-                        command.Parameters.AddWithValue("@UserID", card.UserID);
-                        command.ExecuteNonQuery();
-                    }
-                }
-            }
-
-            // Delete existing CardPacks for the user
-            string deleteCardPacks = "DELETE FROM CardPacks WHERE UserID = @UserID;";
-            using (var command = new NpgsqlCommand(deleteCardPacks, connection, transaction))
-            {
-                command.Parameters.AddWithValue("@UserID", inventory.UserID);
-                command.ExecuteNonQuery();
-            }
-
-            // Insert new CardPacks
-            foreach (var cardPack in inventory.CardPacks)
-            {
-                string insertCardPack = @"
-                        INSERT INTO CardPacks (UserID, Rarity)
-                        VALUES (@UserID, @Rarity);";
-                using (var command = new NpgsqlCommand(insertCardPack, connection, transaction))
-                {
-                    command.Parameters.AddWithValue("@UserID", cardPack.UserID);
-                    command.Parameters.AddWithValue("@Rarity", (int)cardPack.Rarity);
-                    command.ExecuteNonQuery();
-                }
-            }
-        }
-
         private void SaveInventory(Inventory inventory, SqliteConnection connection, SqliteTransaction transaction)
         {
             foreach (var card in inventory.OwnedCards)
             {
-                if (CardExists(card.Name, card.UserID, connection, transaction))
+                if (CardExists(card.ID, connection, transaction))
                 {
                     string updateCard = @"
                             UPDATE Cards
-                            SET Damage = @Damage, Element = @Element, Type = @Type, RarityType = @RarityType, InDeck = @InDeck
-                            WHERE Name = @Name AND UserID = @UserID;";
+                            SET Name = @Name, Damage = @Damage, Element = @Element, Type = @Type, RarityType = @RarityType, InDeck = @InDeck, UserID = @UserID
+                            WHERE Id = @Id;";
                     using (var command = new SqliteCommand(updateCard, connection, transaction))
                     {
+                        command.Parameters.AddWithValue("@Id", card.ID);
+                        command.Parameters.AddWithValue("@Name", card.Name);
                         command.Parameters.AddWithValue("@Damage", card.Damage);
                         command.Parameters.AddWithValue("@Element", (int)card.Element);
                         command.Parameters.AddWithValue("@Type", (int)card.Type);
                         command.Parameters.AddWithValue("@RarityType", (int)card.RarityType);
                         command.Parameters.AddWithValue("@InDeck", card.InDeck);
-                        command.Parameters.AddWithValue("@Name", card.Name);
                         command.Parameters.AddWithValue("@UserID", card.UserID);
                         command.ExecuteNonQuery();
                     }
@@ -365,7 +304,8 @@ namespace SemesterProjekt1
                 {
                     string insertCard = @"
                             INSERT INTO Cards (Name, Damage, Element, Type, RarityType, InDeck, UserID)
-                            VALUES (@Name, @Damage, @Element, @Type, @RarityType, @InDeck, @UserID);";
+                            VALUES (@Name, @Damage, @Element, @Type, @RarityType, @InDeck, @UserID);
+                            SELECT last_insert_rowid();";
                     using (var command = new SqliteCommand(insertCard, connection, transaction))
                     {
                         command.Parameters.AddWithValue("@Name", card.Name);
@@ -375,7 +315,7 @@ namespace SemesterProjekt1
                         command.Parameters.AddWithValue("@RarityType", (int)card.RarityType);
                         command.Parameters.AddWithValue("@InDeck", card.InDeck);
                         command.Parameters.AddWithValue("@UserID", card.UserID);
-                        command.ExecuteNonQuery();
+                        card.ID = (long)command.ExecuteScalar();
                     }
                 }
             }
@@ -403,24 +343,88 @@ namespace SemesterProjekt1
             }
         }
 
-        private bool CardExists(string name, int userId, NpgsqlConnection connection, NpgsqlTransaction transaction)
+        private void SaveInventory(Inventory inventory, NpgsqlConnection connection, NpgsqlTransaction transaction)
         {
-            string checkCardExists = "SELECT COUNT(1) FROM Cards WHERE Name = @Name AND UserID = @UserID;";
-            using (var command = new NpgsqlCommand(checkCardExists, connection, transaction))
+            foreach (var card in inventory.OwnedCards)
             {
-                command.Parameters.AddWithValue("@Name", name);
-                command.Parameters.AddWithValue("@UserID", userId);
+                if (CardExists(card.ID, connection, transaction))
+                {
+                    string updateCard = @"
+                            UPDATE Cards
+                            SET Name = @Name, Damage = @Damage, Element = @Element, Type = @Type, RarityType = @RarityType, InDeck = @InDeck, UserID = @UserID
+                            WHERE Id = @Id;";
+                    using (var command = new NpgsqlCommand(updateCard, connection, transaction))
+                    {
+                        command.Parameters.AddWithValue("@Id", card.ID);
+                        command.Parameters.AddWithValue("@Name", card.Name);
+                        command.Parameters.AddWithValue("@Damage", card.Damage);
+                        command.Parameters.AddWithValue("@Element", (int)card.Element);
+                        command.Parameters.AddWithValue("@Type", (int)card.Type);
+                        command.Parameters.AddWithValue("@RarityType", (int)card.RarityType);
+                        command.Parameters.AddWithValue("@InDeck", card.InDeck);
+                        command.Parameters.AddWithValue("@UserID", card.UserID);
+                        command.ExecuteNonQuery();
+                    }
+                }
+                else
+                {
+                    string insertCard = @"
+                            INSERT INTO Cards (Name, Damage, Element, Type, RarityType, InDeck, UserID)
+                            VALUES (@Name, @Damage, @Element, @Type, @RarityType, @InDeck, @UserID)
+                            RETURNING Id;";
+                    using (var command = new NpgsqlCommand(insertCard, connection, transaction))
+                    {
+                        command.Parameters.AddWithValue("@Name", card.Name);
+                        command.Parameters.AddWithValue("@Damage", card.Damage);
+                        command.Parameters.AddWithValue("@Element", (int)card.Element);
+                        command.Parameters.AddWithValue("@Type", (int)card.Type);
+                        command.Parameters.AddWithValue("@RarityType", (int)card.RarityType);
+                        command.Parameters.AddWithValue("@InDeck", card.InDeck);
+                        command.Parameters.AddWithValue("@UserID", card.UserID);
+                        card.ID = (long)command.ExecuteScalar();
+                    }
+                }
+            }
+
+            // Delete existing CardPacks for the user
+            string deleteCardPacks = "DELETE FROM CardPacks WHERE UserID = @UserID;";
+            using (var command = new NpgsqlCommand(deleteCardPacks, connection, transaction))
+            {
+                command.Parameters.AddWithValue("@UserID", inventory.UserID);
+                command.ExecuteNonQuery();
+            }
+
+            // Insert new CardPacks
+            foreach (var cardPack in inventory.CardPacks)
+            {
+                string insertCardPack = @"
+                        INSERT INTO CardPacks (UserID, Rarity)
+                        VALUES (@UserID, @Rarity);";
+                using (var command = new NpgsqlCommand(insertCardPack, connection, transaction))
+                {
+                    command.Parameters.AddWithValue("@UserID", cardPack.UserID);
+                    command.Parameters.AddWithValue("@Rarity", (int)cardPack.Rarity);
+                    command.ExecuteNonQuery();
+                }
+            }
+        }
+
+        private bool CardExists(long id, SqliteConnection connection, SqliteTransaction transaction)
+        {
+            string checkCardExists = "SELECT COUNT(1) FROM Cards WHERE Id = @Id;";
+            using (var command = new SqliteCommand(checkCardExists, connection, transaction))
+            {
+                command.Parameters.AddWithValue("@Id", id);
                 return Convert.ToInt32(command.ExecuteScalar()) > 0;
             }
         }
 
-        private bool CardExists(string name, int userId, SqliteConnection connection, SqliteTransaction transaction)
+        private bool CardExists(long id, NpgsqlConnection connection, NpgsqlTransaction transaction)
         {
-            string checkCardExists = "SELECT COUNT(1) FROM Cards WHERE Name = @Name AND UserID = @UserID;";
-            using (var command = new SqliteCommand(checkCardExists, connection, transaction))
+            string checkCardExists = "SELECT COUNT(1) FROM Cards WHERE Id = @Id;";
+            using (var command = new NpgsqlCommand(checkCardExists, connection, transaction))
             {
-                command.Parameters.AddWithValue("@Name", name);
-                command.Parameters.AddWithValue("@UserID", userId);
+                command.Parameters.AddWithValue("@Id", id);
                 return Convert.ToInt32(command.ExecuteScalar()) > 0;
             }
         }

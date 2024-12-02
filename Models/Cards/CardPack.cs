@@ -44,6 +44,7 @@ namespace SemesterProjekt1
 
         private Card GenerateRandomCard(int userID)
         {
+            long id = _random?.Value?.NextInt64(0, long.MaxValue) ?? 0;
             var element = (ElementType)(_random?.Value?.Next(0, Enum.GetValues(typeof(ElementType)).Length) ?? 0);
             var type = (CardType)(_random?.Value?.Next(0, Enum.GetValues(typeof(CardType)).Length) ?? 0);
             var rarity = (Rarity)(_random?.Value?.Next(1, Enum.GetValues(typeof(Rarity)).Length) ?? 1);
@@ -57,12 +58,12 @@ namespace SemesterProjekt1
                     element = ElementType.Fire;
                 }
 
-                return new MonsterCard(name, damage, element, rarity, userID);
+                return new MonsterCard(id, name, damage, element, rarity, userID);
             }
             else
             {
                 string name = SpellNames[_random?.Value?.Next(0, SpellNames.Length) ?? 0];
-                return new SpellCard(name, damage, element, rarity, userID);
+                return new SpellCard(id, name, damage, element, rarity, userID);
             }
         }
 

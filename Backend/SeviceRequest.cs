@@ -513,8 +513,8 @@ namespace SemesterProjekt1
                 var formData = requestBodyString.Split('&')
                     .Select(part => part.Split('='))
                     .ToDictionary(split => split[0], split => split.Length > 1 ? split[1] : string.Empty);
-                username = formData.ContainsKey("Username") ? formData["Username"] : null;
-                password = formData.ContainsKey("Password") ? formData["Password"] : null;
+                username = formData.ContainsKey("username") ? formData["username"] : null;
+                password = formData.ContainsKey("password") ? formData["password"] : null;
             }
 
             if (username == null || password == null)
@@ -575,8 +575,8 @@ namespace SemesterProjekt1
                 var formData = requestBodyString.Split('&')
                     .Select(part => part.Split('='))
                     .ToDictionary(split => split[0], split => split.Length > 1 ? split[1] : string.Empty);
-                username = formData.ContainsKey("Username") ? formData["Username"] : null;
-                password = formData.ContainsKey("Password") ? formData["Password"] : null;
+                username = formData.ContainsKey("username") ? formData["username"] : null;
+                password = formData.ContainsKey("password") ? formData["password"] : null;
             }
 
             if (username == null || password == null)
