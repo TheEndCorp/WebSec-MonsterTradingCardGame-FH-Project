@@ -30,9 +30,9 @@ namespace SemesterProjekt1
                     <h1>Login</h1>
                     <form method='post' action='/login'>
                         <label for='Username'>Username:</label>
-                        <input type='text' id='Username' name='Username'><br>
+                        <input type='text' id='username' name='username'><br>
                         <label for='Password'>Password:</label>
-                        <input type='Password' id='Password' name='Password'><br>
+                        <input type='password' id='password' name='password'><br>
                         <input type='submit' value='Login'>
                     </form>
                 </body>
