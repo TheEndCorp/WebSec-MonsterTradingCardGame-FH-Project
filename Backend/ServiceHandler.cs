@@ -6,6 +6,7 @@ namespace SemesterProjekt1
     {
         private List<User> _lobby;
         public List<User> _users;
+        public List<Card> _cards;
         public DatabaseHandler2 _databaseHandler;
 
         public UserServiceHandler()
@@ -64,6 +65,18 @@ namespace SemesterProjekt1
         public List<User> GetAllUsers()
         {
             return _users;
+        }
+
+        public List<Card> GetAllCards()
+        {
+            List<Card> allCards = new List<Card>();
+
+            foreach (var user in _users)
+            {
+                allCards.AddRange(user.Inventory.OwnedCards);
+            }
+
+            return allCards;
         }
 
         public User GetUserById(int id)

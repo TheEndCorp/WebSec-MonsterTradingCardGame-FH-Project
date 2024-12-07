@@ -120,7 +120,7 @@ namespace SemesterProjekt1
         {
             string createUsersTable = @"
                     CREATE TABLE IF NOT EXISTS Users (
-                        Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        Id INTEGER PRIMARY KEY,
                         Username TEXT NOT NULL,
                         Password TEXT NOT NULL,
                         Money INTEGER,
@@ -133,7 +133,7 @@ namespace SemesterProjekt1
 
             string createCardsTable = @"
                     CREATE TABLE IF NOT EXISTS Cards (
-                        Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        Id INTEGER PRIMARY KEY,
                         Name TEXT NOT NULL,
                         Damage INTEGER NOT NULL,
                         Element INTEGER NOT NULL,
@@ -303,11 +303,11 @@ namespace SemesterProjekt1
                 else
                 {
                     string insertCard = @"
-                            INSERT INTO Cards (Name, Damage, Element, Type, RarityType, InDeck, UserID)
-                            VALUES (@Name, @Damage, @Element, @Type, @RarityType, @InDeck, @UserID);
-                            SELECT last_insert_rowid();";
+                            INSERT INTO Cards (Id, Name, Damage, Element, Type, RarityType, InDeck, UserID)
+                            VALUES (@Id, @Name, @Damage, @Element, @Type, @RarityType, @InDeck, @UserID);";
                     using (var command = new SqliteCommand(insertCard, connection, transaction))
                     {
+                        command.Parameters.AddWithValue("@Id", card.ID);
                         command.Parameters.AddWithValue("@Name", card.Name);
                         command.Parameters.AddWithValue("@Damage", card.Damage);
                         command.Parameters.AddWithValue("@Element", (int)card.Element);
@@ -315,7 +315,7 @@ namespace SemesterProjekt1
                         command.Parameters.AddWithValue("@RarityType", (int)card.RarityType);
                         command.Parameters.AddWithValue("@InDeck", card.InDeck);
                         command.Parameters.AddWithValue("@UserID", card.UserID);
-                        card.ID = (long)command.ExecuteScalar();
+                        command.ExecuteNonQuery();
                     }
                 }
             }

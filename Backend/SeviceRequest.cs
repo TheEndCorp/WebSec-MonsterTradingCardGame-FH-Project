@@ -41,6 +41,13 @@ namespace SemesterProjekt1
                         SendResponse(response, jsonResponse, "application/json");
                         break;
                     }
+                case "/cards":
+                    {
+                        var allCards = _userServiceHandler.GetAllCards();
+                        string jsonResponse = SerializeToJson(allCards);
+                        SendResponse(response, jsonResponse, "application/json");
+                        break;
+                    }
                 case string path when path1.StartsWith("/user/"):
                     {
                         await HandleGetUserByIdAsync(request, response, path1);
