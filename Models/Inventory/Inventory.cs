@@ -9,6 +9,7 @@ namespace SemesterProjekt1
     public class Inventory
     {
         public List<Card> OwnedCards { get; set; }
+        public List<Card> JustOpened { get; set; }
         public Deck Deck { get; set; }
         public List<CardPack> CardPacks { get; set; }
         public int Money { get; set; }
@@ -66,11 +67,18 @@ namespace SemesterProjekt1
 
         public void OpenCardPack(CardPack cardPack)
         {
+            JustOpened = new List<Card>();
             var newCards = cardPack.OpenCardPack(UserID);
             foreach (var card in newCards)
             {
                 AddCardToOwnedCards(card);
+                JustOpened.Add(card);
             }
+        }
+
+        public void JustOpenedClear()
+        {
+            JustOpened.Clear();
         }
     }
 }

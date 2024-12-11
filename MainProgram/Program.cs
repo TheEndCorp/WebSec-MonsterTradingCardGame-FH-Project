@@ -60,7 +60,7 @@ namespace SemesterProjekt1
             {
                 if (ipAddress.AddressFamily == AddressFamily.InterNetwork || ipAddress.AddressFamily == AddressFamily.InterNetworkV6)
                 {
-                    Console.WriteLine($"http://{ipAddress}:10000/");
+                    Console.WriteLine($"http://{ipAddress}:10001/");
                 }
             }
         }
@@ -89,7 +89,7 @@ namespace SemesterProjekt1
                                 memoryStream.Position = 0; // Reset position for reading
 
                                 // Convert the MemoryStream to a string for the request
-                                string requestText = Encoding.UTF8.GetString(memoryStream.ToArray());
+                                string requestText = Encoding.UTF8.GetString(memoryStream.ToArray(), 0, (int)memoryStream.Length);
 
                                 Console.BackgroundColor = ConsoleColor.DarkBlue;
                                 Console.WriteLine($"Received request:\n{requestText}");
@@ -97,6 +97,12 @@ namespace SemesterProjekt1
 
                                 // Parse HTTP request
                                 string[] requestLines = requestText.Split(new[] { "\r\n\r\n" }, 2, StringSplitOptions.None);
+                                if (requestLines.Length < 2)
+                                {
+                                    SendErrorResponse(networkStream);
+                                    return;
+                                }
+
                                 string requestLine = requestLines[0];
                                 string[] requestParts = requestLine.Split(' ');
 
@@ -108,6 +114,13 @@ namespace SemesterProjekt1
 
                                 string method = requestParts[0];
                                 string path = requestParts[1];
+
+                                // Validate method and path
+                                if (!IsValidHttpMethod(method) || !IsValidPath(path))
+                                {
+                                    SendErrorResponse(networkStream);
+                                    return;
+                                }
 
                                 // Handle WebSocket upgrade or HTTP request based on path
                                 if (requestText.Contains("Upgrade: websocket"))
@@ -149,6 +162,18 @@ namespace SemesterProjekt1
             }
         }
 
+        private static bool IsValidHttpMethod(string method)
+        {
+            string[] validMethods = { "GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD" };
+            return validMethods.Contains(method.ToUpper());
+        }
+
+        private static bool IsValidPath(string path)
+        {
+            // Add more validation rules as needed
+            return !string.IsNullOrEmpty(path) && path.Length <= 2048 && !path.Contains("..");
+        }
+
         private static async Task HandleRequestAsync(MemoryStream memoryStream, NetworkStream networkStream, string method, string path, UserServiceRequest requester)
         {
             try
@@ -162,7 +187,7 @@ namespace SemesterProjekt1
             catch (Exception ex)
             {
                 Console.WriteLine($"Error handling request: {ex.Message}");
-                SendErrorResponse(memoryStream);
+                SendErrorResponse(networkStream);
             }
         }
 
@@ -291,7 +316,8 @@ namespace SemesterProjekt1
 
         private static void SendErrorResponse(Stream stream)
         {
-            string response = $"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n";
+            Console.WriteLine("Error Response");
+            string response = $"HTTP/1.1 404 Not found\r\nContent-Length: 0\r\n\r\n";
             byte[] responseBytes = Encoding.UTF8.GetBytes(response);
             stream.Write(responseBytes, 0, responseBytes.Length);
             stream.Flush();  // Ensure data is sent immediately.

@@ -5,6 +5,7 @@ using System.Transactions;
 
 // 20 hours already Wasted from HTTPLISTENER -> TCP ANDWiwkndiunwaidon Day 3 Note of this shit
 // 25 and nearly finished
+// i lost track of time :skull: Wakatime gonna save me i guess
 
 namespace SemesterProjekt1
 {
@@ -287,20 +288,20 @@ namespace SemesterProjekt1
             {
                 if (user.Inventory.CardPacks.Count > 0)
                 {
-                    for (int i = user.Inventory.CardPacks.Count - 1; i >= 0; i--)
-                    {
-                        user.Inventory.OpenCardPack(user.Inventory.CardPacks[i]);
-                        user.Inventory.CardPacks.RemoveAt(i);
-                    }
+                    var firstCardPack = user.Inventory.CardPacks.First();
+                    user.Inventory.OpenCardPack(firstCardPack);
+                    user.Inventory.CardPacks.Remove(firstCardPack);
+                    user.Inventory.CardPacks = user.Inventory.CardPacks.OrderBy(pack => pack.UserID).ToList();
                 }
 
-                string jsonResponse = SerializeToJson(user.Inventory.OwnedCards);
+                string jsonResponse = SerializeToJson(user.Inventory.JustOpened);
                 writer.WriteLine("HTTP/1.1 200 OK");
                 writer.WriteLine("Content-Type: application/json");
                 writer.WriteLine($"Content-Length: {jsonResponse.Length}");
                 writer.WriteLine();
                 writer.WriteLine(jsonResponse);
                 writer.Flush();
+                user.Inventory.JustOpenedClear();
             }
             else
             {
