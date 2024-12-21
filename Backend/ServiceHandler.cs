@@ -142,10 +142,18 @@ namespace SemesterProjekt1
             var user = GetUserById(userId);
             if (user != null && AuthenticateUser(username, password) != null)
             {
-                user.Inventory.AddCardPack(new CardPack(userId), amount);
-                _databaseHandler.UpdateUser(user);
-                var updatedUser = _databaseHandler.LoadUserById(user.Id);
-                _users[_users.FindIndex(u => u.Id == user.Id)] = updatedUser;
+                try
+                {
+                    user.Inventory.AddCardPack(new CardPack(userId), amount);
+                    _databaseHandler.UpdateUser(user);
+                    var updatedUser = _databaseHandler.LoadUserById(user.Id);
+                    _users[_users.FindIndex(u => u.Id == user.Id)] = updatedUser;
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error: {ex.Message}");
+                    return null;
+                }
             }
             return user;
         }

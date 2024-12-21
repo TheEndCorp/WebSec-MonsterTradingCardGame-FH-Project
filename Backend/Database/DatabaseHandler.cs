@@ -1,6 +1,7 @@
 ﻿using System.Text.Json;
 using System.Text.Json.Serialization;
 
+/*
 namespace SemesterProjekt1
 {
     public class DatabaseHandler
@@ -159,3 +160,4 @@ namespace SemesterProjekt1
         }
     }
 }
+*/

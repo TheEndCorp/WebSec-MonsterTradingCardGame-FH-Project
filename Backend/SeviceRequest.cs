@@ -330,8 +330,15 @@ namespace SemesterProjekt1
 
                 if (amount > 0)
                 {
-                    user.Inventory.AddCardPack(new CardPack(user.Id), amount);
+                    try { user.Inventory.AddCardPack(new CardPack(user.Id), amount); }
+                    catch (InvalidOperationException ex)
+                    {
+                        SendErrorResponse(writer, HttpStatusCode.BadRequest, ex.Message);
+                        return;
+                    }
+
                     _userServiceHandler.UpdateUser(user.Id, user);
+
                     string jsonResponse = SerializeToJson(new { message = "Packs bought successfully" });
                     writer.WriteLine("HTTP/1.1 200 OK");
                     writer.WriteLine("Content-Type: application/json");

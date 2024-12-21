@@ -28,7 +28,7 @@ namespace SemesterProjekt1
             this.OwnedCards = ownedCards ?? new List<Card>();
             this.Deck = deck ?? new Deck();
             this.CardPacks = cardPacks ?? new List<CardPack>();
-            this.Money = (OwnedCards.Count == 0 && CardPacks.Count == 0) ? 20 : money;
+            this.Money = money;
             this.UserID = userID;
             this.ELO = ELO;
         }
@@ -47,17 +47,18 @@ namespace SemesterProjekt1
 
         public void AddCardPack(CardPack cardPack)
         {
-            CardPacks.Add(cardPack);
+            CardPacks.Add(new CardPack(this.UserID));
         }
 
         public void AddCardPack(CardPack cardPack, int amount)
         {
-            if (amount <= 0) return;
+            if (amount <= 0) throw new ArgumentException("Amount must be greater than zero.");
+            if (this.Money < 5 * amount) throw new InvalidOperationException("Not enough money to buy the card packs.");
 
-            while (amount > 0 && Money >= 5 * amount)
+            while (amount > 0 && this.Money >= 5 * amount)
             {
-                CardPacks.Add(new CardPack(UserID));
-                Money -= 5;
+                CardPacks.Add(new CardPack(this.UserID));
+                this.Money -= 5;
                 amount--;
             }
         }
