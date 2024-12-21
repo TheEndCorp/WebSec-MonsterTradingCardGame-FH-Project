@@ -284,9 +284,9 @@ namespace SemesterProjekt1
                 if (CardExists(card.ID, connection, transaction))
                 {
                     string updateCard = @"
-                            UPDATE Cards
-                            SET Name = @Name, Damage = @Damage, Element = @Element, Type = @Type, RarityType = @RarityType, InDeck = @InDeck, UserID = @UserID
-                            WHERE Id = @Id;";
+                    UPDATE Cards
+                    SET Name = @Name, Damage = @Damage, Element = @Element, Type = @Type, RarityType = @RarityType, InDeck = @InDeck, UserID = @UserID
+                    WHERE Id = @Id;";
                     using (var command = new SqliteCommand(updateCard, connection, transaction))
                     {
                         command.Parameters.AddWithValue("@Id", card.ID);
@@ -302,9 +302,16 @@ namespace SemesterProjekt1
                 }
                 else
                 {
+                    int n = 1;
+                    while (CardExists(card.ID, connection, transaction))
+                    {
+                        card.ID += 1 + (n * n);
+                        n++;
+                    }
+
                     string insertCard = @"
-                            INSERT INTO Cards (Id, Name, Damage, Element, Type, RarityType, InDeck, UserID)
-                            VALUES (@Id, @Name, @Damage, @Element, @Type, @RarityType, @InDeck, @UserID);";
+                    INSERT INTO Cards (Id, Name, Damage, Element, Type, RarityType, InDeck, UserID)
+                    VALUES (@Id, @Name, @Damage, @Element, @Type, @RarityType, @InDeck, @UserID);";
                     using (var command = new SqliteCommand(insertCard, connection, transaction))
                     {
                         command.Parameters.AddWithValue("@Id", card.ID);
@@ -332,8 +339,8 @@ namespace SemesterProjekt1
             foreach (var cardPack in inventory.CardPacks)
             {
                 string insertCardPack = @"
-                        INSERT INTO CardPacks (UserID, Rarity)
-                        VALUES (@UserID, @Rarity);";
+                INSERT INTO CardPacks (UserID, Rarity)
+                VALUES (@UserID, @Rarity);";
                 using (var command = new SqliteCommand(insertCardPack, connection, transaction))
                 {
                     command.Parameters.AddWithValue("@UserID", cardPack.UserID);
@@ -350,9 +357,9 @@ namespace SemesterProjekt1
                 if (CardExists(card.ID, connection, transaction))
                 {
                     string updateCard = @"
-                            UPDATE Cards
-                            SET Name = @Name, Damage = @Damage, Element = @Element, Type = @Type, RarityType = @RarityType, InDeck = @InDeck, UserID = @UserID
-                            WHERE Id = @Id;";
+                    UPDATE Cards
+                    SET Name = @Name, Damage = @Damage, Element = @Element, Type = @Type, RarityType = @RarityType, InDeck = @InDeck, UserID = @UserID
+                    WHERE Id = @Id;";
                     using (var command = new NpgsqlCommand(updateCard, connection, transaction))
                     {
                         command.Parameters.AddWithValue("@Id", card.ID);
@@ -368,10 +375,17 @@ namespace SemesterProjekt1
                 }
                 else
                 {
+                    int n = 1;
+                    while (CardExists(card.ID, connection, transaction))
+                    {
+                        card.ID += 1 + (n * n);
+                        n++;
+                    }
+
                     string insertCard = @"
-                            INSERT INTO Cards (Name, Damage, Element, Type, RarityType, InDeck, UserID)
-                            VALUES (@Name, @Damage, @Element, @Type, @RarityType, @InDeck, @UserID)
-                            RETURNING Id;";
+                    INSERT INTO Cards (Name, Damage, Element, Type, RarityType, InDeck, UserID)
+                    VALUES (@Name, @Damage, @Element, @Type, @RarityType, @InDeck, @UserID)
+                    RETURNING Id;";
                     using (var command = new NpgsqlCommand(insertCard, connection, transaction))
                     {
                         command.Parameters.AddWithValue("@Name", card.Name);
@@ -398,8 +412,8 @@ namespace SemesterProjekt1
             foreach (var cardPack in inventory.CardPacks)
             {
                 string insertCardPack = @"
-                        INSERT INTO CardPacks (UserID, Rarity)
-                        VALUES (@UserID, @Rarity);";
+                INSERT INTO CardPacks (UserID, Rarity)
+                VALUES (@UserID, @Rarity);";
                 using (var command = new NpgsqlCommand(insertCardPack, connection, transaction))
                 {
                     command.Parameters.AddWithValue("@UserID", cardPack.UserID);
@@ -540,6 +554,115 @@ namespace SemesterProjekt1
                     }
                 }
             }
+        }
+
+        public void UpdateUser(User user)
+        {
+            if (_usePostgres)
+            {
+                using (var connection = new NpgsqlConnection(_postgresConnectionString))
+                {
+                    connection.Open();
+                    using (var transaction = connection.BeginTransaction())
+                    {
+                        string insertOrUpdateUser = @"
+                                INSERT INTO Users (Id, Username, Password, Money, Elo)
+                                VALUES (@Id, @Username, @Password, @Money, @Elo)
+                                ON CONFLICT (Id) DO UPDATE
+                                SET Username = EXCLUDED.Username,
+                                    Password = EXCLUDED.Password,
+                                    Money = EXCLUDED.Money,
+                                    Elo = EXCLUDED.Elo;";
+                        using (var command = new NpgsqlCommand(insertOrUpdateUser, connection, transaction))
+                        {
+                            command.Parameters.AddWithValue("@Id", user.Id);
+                            command.Parameters.AddWithValue("@Username", user.Username);
+                            command.Parameters.AddWithValue("@Password", user.Password);
+                            command.Parameters.AddWithValue("@Money", user.Inventory.Money);
+                            command.Parameters.AddWithValue("@Elo", user.Inventory.ELO);
+                            command.ExecuteNonQuery();
+                        }
+
+                        SaveInventory(user.Inventory, connection, transaction);
+                        transaction.Commit();
+                    }
+                }
+            }
+            else
+            {
+                using (var connection = new SqliteConnection(_sqliteConnectionString))
+                {
+                    connection.Open();
+                    using (var transaction = connection.BeginTransaction())
+                    {
+                        string insertOrUpdateUser = @"
+                                INSERT OR REPLACE INTO Users (Id, Username, Password, Money, Elo)
+                                VALUES (@Id, @Username, @Password, @Money, @Elo);";
+                        using (var command = new SqliteCommand(insertOrUpdateUser, connection, transaction))
+                        {
+                            command.Parameters.AddWithValue("@Id", user.Id);
+                            command.Parameters.AddWithValue("@Username", user.Username);
+                            command.Parameters.AddWithValue("@Password", user.Password);
+                            command.Parameters.AddWithValue("@Money", user.Inventory.Money);
+                            command.Parameters.AddWithValue("@Elo", user.Inventory.ELO);
+                            command.ExecuteNonQuery();
+                        }
+
+                        SaveInventory(user.Inventory, connection, transaction);
+                        transaction.Commit();
+                    }
+                }
+            }
+        }
+
+        public User LoadUserById(int userId)
+        {
+            User user = null;
+            if (_usePostgres)
+            {
+                using (var connection = new NpgsqlConnection(_postgresConnectionString))
+                {
+                    connection.Open();
+                    string selectUser = "SELECT * FROM Users WHERE Id = @Id;";
+                    using (var command = new NpgsqlCommand(selectUser, connection))
+                    {
+                        command.Parameters.AddWithValue("@Id", userId);
+                        using (var reader = command.ExecuteReader())
+                        {
+                            if (reader.Read())
+                            {
+                                string username = reader.GetString(1);
+                                string password = reader.GetString(2);
+                                var inventory = LoadInventory(userId);
+                                user = new User(userId, username, password, inventory);
+                            }
+                        }
+                    }
+                }
+            }
+            else
+            {
+                using (var connection = new SqliteConnection(_sqliteConnectionString))
+                {
+                    connection.Open();
+                    string selectUser = "SELECT * FROM Users WHERE Id = @Id;";
+                    using (var command = new SqliteCommand(selectUser, connection))
+                    {
+                        command.Parameters.AddWithValue("@Id", userId);
+                        using (var reader = command.ExecuteReader())
+                        {
+                            if (reader.Read())
+                            {
+                                string username = reader.GetString(1);
+                                string password = reader.GetString(2);
+                                var inventory = LoadInventory(userId);
+                                user = new User(userId, username, password, inventory);
+                            }
+                        }
+                    }
+                }
+            }
+            return user;
         }
     }
 }

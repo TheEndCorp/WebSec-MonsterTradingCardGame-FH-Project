@@ -97,7 +97,7 @@ namespace SemesterProjekt1
             }
 
             _users.Add(user);
-            _databaseHandler.SaveUsers(_users);
+            _databaseHandler.UpdateUser(user);
         }
 
         public User GetUserByName(string username)
@@ -116,7 +116,9 @@ namespace SemesterProjekt1
             {
                 user.Username = updatedUser.Username;
                 user.Password = updatedUser.Password;
-                _databaseHandler.SaveUsers(_users);
+                _databaseHandler.UpdateUser(user);
+                updatedUser = _databaseHandler.LoadUserById(user.Id);
+                _users[_users.FindIndex(u => u.Id == user.Id)] = updatedUser;
             }
         }
 
@@ -141,7 +143,9 @@ namespace SemesterProjekt1
             if (user != null && AuthenticateUser(username, password) != null)
             {
                 user.Inventory.AddCardPack(new CardPack(userId), amount);
-                _databaseHandler.SaveUsers(_users);
+                _databaseHandler.UpdateUser(user);
+                var updatedUser = _databaseHandler.LoadUserById(user.Id);
+                _users[_users.FindIndex(u => u.Id == user.Id)] = updatedUser;
             }
             return user;
         }
@@ -156,7 +160,9 @@ namespace SemesterProjekt1
                     var cardPack = user.Inventory.CardPacks[0];
                     user.Inventory.OpenCardPack(cardPack);
                     user.Inventory.CardPacks.RemoveAt(0);
-                    _databaseHandler.SaveUsers(_users);
+                    _databaseHandler.UpdateUser(user);
+                    var updatedUser = _databaseHandler.LoadUserById(user.Id);
+                    _users[_users.FindIndex(u => u.Id == user.Id)] = updatedUser;
                 }
             }
             return user;
@@ -168,7 +174,9 @@ namespace SemesterProjekt1
             if (user != null)
             {
                 user.Inventory.Deck.Cards = deck;
-                _databaseHandler.SaveUsers(_users);
+                _databaseHandler.UpdateUser(user);
+                var updatedUser = _databaseHandler.LoadUserById(user.Id);
+                _users[_users.FindIndex(u => u.Id == user.Id)] = updatedUser;
             }
             else
             {
@@ -189,7 +197,9 @@ namespace SemesterProjekt1
                         user.Inventory.Deck.AddCard(cardsList[pos]);
                         user.Inventory.OwnedCards[pos].InDeck = true;
                     }
-                    _databaseHandler.SaveUsers(_users);
+                    _databaseHandler.UpdateUser(user);
+                    var updatedUser = _databaseHandler.LoadUserById(user.Id);
+                    _users[_users.FindIndex(u => u.Id == user.Id)] = updatedUser;
                 }
             }
             return user;
