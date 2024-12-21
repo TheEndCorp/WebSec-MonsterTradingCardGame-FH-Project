@@ -26,9 +26,9 @@ namespace SemesterProjekt1
         {
             _users = new List<User>
                 {
-                    new User(1, "Ender", "123"),
-                    new User(2, "John", "test"),
-                    new User(3, "Jane", "test"),
+                    new User(0, "Ender", "123"),
+                    new User(1, "John", "test"),
+                    new User(2, "Jane", "test"),
                 };
         }
 

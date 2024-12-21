@@ -1,4 +1,5 @@
-﻿using System.Text;
+﻿using Npgsql.Internal;
+using System.Text;
 using System.Text.Json;
 
 // 20 hours already Wasted from HTTPLISTENER -> TCP ANDWiwkndiunwaidon Day 3 Note of this shit
@@ -42,9 +43,19 @@ namespace SemesterProjekt1
                     }
                 case "/cards":
                     {
+                        var user = await IsIdentiyYesUserCookie(request, response);
+                        if(user == null)
+                        { 
+                            SendErrorResponse(response, HttpStatusCode.Unauthorized);
+                        }
+
+                        else
+                        { 
                         var allCards = _userServiceHandler.GetAllCards();
                         string jsonResponse = SerializeToJson(allCards);
                         SendResponse(response, jsonResponse, "application/json");
+                        
+                        }
                         break;
                     }
                 case string path when path1.StartsWith("/user/"):

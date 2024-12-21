@@ -47,6 +47,6 @@
         }
 
         public static string[] MonsterNames = { "Goblin", "Orc", "Dragon", "Knight", "Elf", "Dwarf", "Giant", "Kraken", "Wizard", "FireElf" };
-        public static string[] SpellNames = { "Fireball", "Heal", "Lightning", "WaterBall" };
+        public static string[] SpellNames = { "Fireball", "Lightning", "WaterBall" };
     }
 }
