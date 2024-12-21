@@ -1,12 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Net;
-using System.Net.Sockets;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace SemesterProjekt1
+﻿namespace SemesterProjekt1
 {
     public class HTMLGEN
     {

@@ -1,6 +1,6 @@
-﻿using System.Collections.Concurrent;
-using System.Net;
+﻿using System.Net;
 using System.Net.Sockets;
+
 //using System.Net.WebSockets;
 using System.Security.Principal;
 using System.Text;
@@ -10,7 +10,7 @@ namespace SemesterProjekt1
     internal class Program
     {
         private static TcpListener listener;
-       // private static ConcurrentDictionary<WebSocket, string?> _sockets = new ConcurrentDictionary<WebSocket, string?>();
+        // private static ConcurrentDictionary<WebSocket, string?> _sockets = new ConcurrentDictionary<WebSocket, string?>();
 
         private static async Task Main()
         {
@@ -138,11 +138,11 @@ namespace SemesterProjekt1
                                         Console.WriteLine("HTTP request for fight lobby.");
                                         await SendHttpResponseAsync(networkStream, GenerateFightLobbyHtml());
                                     }*/
-                                    else
-                                    {
-                                        Console.WriteLine("Generic HTTP request received.");
-                                        await HandleRequestAsync(memoryStream, networkStream, method, path, requester);
-                                    } 
+                                else
+                                {
+                                    Console.WriteLine("Generic HTTP request received.");
+                                    await HandleRequestAsync(memoryStream, networkStream, method, path, requester);
+                                }
                             }
                         }
                     }
@@ -174,134 +174,134 @@ namespace SemesterProjekt1
             return !string.IsNullOrEmpty(path) && path.Length <= 2048 && !path.Contains("..");
         }
 
-       
-                private static async Task HandleRequestAsync(MemoryStream memoryStream, NetworkStream networkStream, string method, string path, UserServiceRequest requester)
-                {
-                    try
-                    {
-                        memoryStream.Position = 0; // Reset position for reading
-                        using var reader = new StreamReader(memoryStream);
-                        using var writer = new StreamWriter(networkStream) { AutoFlush = true };
+        private static async Task HandleRequestAsync(MemoryStream memoryStream, NetworkStream networkStream, string method, string path, UserServiceRequest requester)
+        {
+            try
+            {
+                memoryStream.Position = 0; // Reset position for reading
+                using var reader = new StreamReader(memoryStream);
+                using var writer = new StreamWriter(networkStream) { AutoFlush = true };
 
-                        await requester.HandleRequestAsync(reader, writer, method, path);
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"Error handling request: {ex.Message}");
-                        SendErrorResponse(networkStream);
-                    }
-                }
- /*
-                 private static async Task HandleSocketRequestAsync(SocketRequester socketRequester, TcpClient client, string path)
-                 {
-                     await socketRequester.HandleRequestAsync(path, client);
-                     await Task.Run(() => socketRequester._userServiceHandler._databaseHandler.SaveUsers(socketRequester._userServiceHandler._users));
-                     Console.WriteLine("Action");
-                 }
+                await requester.HandleRequestAsync(reader, writer, method, path);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error handling request: {ex.Message}");
+                SendErrorResponse(networkStream);
+            }
+        }
 
-                private static async Task SendHttpResponseAsync(NetworkStream networkStream, string content, string contentType = "text/html")
-                {
-                    string response = $"HTTP/1.1 200 OK\r\nContent-Type: {contentType}\r\nContent-Length: {Encoding.UTF8.GetByteCount(content)}\r\n\r\n{content}";
-                    byte[] responseBytes = Encoding.UTF8.GetBytes(response);
-                    await networkStream.WriteAsync(responseBytes, 0, responseBytes.Length);
-                    await networkStream.FlushAsync();  // Ensure data is sent immediately.
-                    Console.WriteLine("HTTP response sent to client.");
-                }
+        /*
+                        private static async Task HandleSocketRequestAsync(SocketRequester socketRequester, TcpClient client, string path)
+                        {
+                            await socketRequester.HandleRequestAsync(path, client);
+                            await Task.Run(() => socketRequester._userServiceHandler._databaseHandler.SaveUsers(socketRequester._userServiceHandler._users));
+                            Console.WriteLine("Action");
+                        }
 
-                private static string GenerateLoginPageHtml()
-                {
-                    return @"
-                        <html>
-                            <head>
-                                <title>WebSocket Lobby</title>
-                                <script>
-                                    var socket;
-                                    function connect() {
-                                        socket = new WebSocket('ws://' + window.location.host + '/lobby2');
-                                        socket.onopen = function() {
-                                            console.log('Connected to WebSocket server');
-                                        };
-                                        socket.onmessage = function(event) {
-                                            var messages = document.getElementById('messages');
-                                            messages.value += event.data + '\\n';
-                                        };
-                                        socket.onclose = function() {
-                                            console.log('Disconnected from WebSocket server');
-                                        };
-                                    }
+                       private static async Task SendHttpResponseAsync(NetworkStream networkStream, string content, string contentType = "text/html")
+                       {
+                           string response = $"HTTP/1.1 200 OK\r\nContent-Type: {contentType}\r\nContent-Length: {Encoding.UTF8.GetByteCount(content)}\r\n\r\n{content}";
+                           byte[] responseBytes = Encoding.UTF8.GetBytes(response);
+                           await networkStream.WriteAsync(responseBytes, 0, responseBytes.Length);
+                           await networkStream.FlushAsync();  // Ensure data is sent immediately.
+                           Console.WriteLine("HTTP response sent to client.");
+                       }
 
-                                    function sendMessage() {
-                                        var messageInput = document.getElementById('messageInput');
-                                        if (messageInput.value.trim() !== '') {
-                                            socket.send(messageInput.value);
-                                            messageInput.value = '';
-                                        }
-                                    }
-                                </script>
-                            </head>
-                            <body>
-                                <h1>WebSocket Lobby</h1>
-                                <button onclick='connect()'>Connect to WebSocket</button>
-                                <br/><br/>
-                                <textarea id='messages' rows='10' cols='50' readonly></textarea>
-                                <br/>
-                                <input type='text' id='messageInput' placeholder='Enter message...' />
-                                <button onclick='sendMessage()'>Send</button>
-                            </body>
-                        </html>";
-                }
+                       private static string GenerateLoginPageHtml()
+                       {
+                           return @"
+                               <html>
+                                   <head>
+                                       <title>WebSocket Lobby</title>
+                                       <script>
+                                           var socket;
+                                           function connect() {
+                                               socket = new WebSocket('ws://' + window.location.host + '/lobby2');
+                                               socket.onopen = function() {
+                                                   console.log('Connected to WebSocket server');
+                                               };
+                                               socket.onmessage = function(event) {
+                                                   var messages = document.getElementById('messages');
+                                                   messages.value += event.data + '\\n';
+                                               };
+                                               socket.onclose = function() {
+                                                   console.log('Disconnected from WebSocket server');
+                                               };
+                                           }
 
-                private static string GenerateFightLobbyHtml()
-                {
-                    return @"
-                    <!DOCTYPE html>
-                    <html lang='en'>
-                        <head>
-                            <meta charset='UTF-8'>
-                            <title>Fight Lobby</title>
-                            <script>
-                                let socket;
-                                let rematchTimeout;
+                                           function sendMessage() {
+                                               var messageInput = document.getElementById('messageInput');
+                                               if (messageInput.value.trim() !== '') {
+                                                   socket.send(messageInput.value);
+                                                   messageInput.value = '';
+                                               }
+                                           }
+                                       </script>
+                                   </head>
+                                   <body>
+                                       <h1>WebSocket Lobby</h1>
+                                       <button onclick='connect()'>Connect to WebSocket</button>
+                                       <br/><br/>
+                                       <textarea id='messages' rows='10' cols='50' readonly></textarea>
+                                       <br/>
+                                       <input type='text' id='messageInput' placeholder='Enter message...' />
+                                       <button onclick='sendMessage()'>Send</button>
+                                   </body>
+                               </html>";
+                       }
 
-                                function connect() {
-                                    socket = new WebSocket('ws://' + window.location.host + '/lobby3');
-                                    socket.onopen = function() {
-                                        console.log('Connected to WebSocket for fight.');
-                                        document.getElementById('log').innerHTML = '<p>Waiting for an opponent...</p>';
-                                    };
-                                    socket.onmessage = function(event) {
-                                        const logDiv = document.getElementById('log');
-                                        const message = event.data;
-                                        logDiv.innerHTML += `<p>${message}</p>`;
-                                        if (message.includes('Kampf beendet!')) {
-                                            document.getElementById('rematchButton').style.display = 'block';
-                                            rematchTimeout = setTimeout(() => {
-                                                document.getElementById('rematchButton').style.display = 'none';
-                                                socket.close();
-                                            }, 20000);
-                                        }
-                                    };
-                                    socket.onclose = function() {
-                                        window.location.href = '/'; // Redirect to home page
-                                    };
-                                }
+                       private static string GenerateFightLobbyHtml()
+                       {
+                           return @"
+                           <!DOCTYPE html>
+                           <html lang='en'>
+                               <head>
+                                   <meta charset='UTF-8'>
+                                   <title>Fight Lobby</title>
+                                   <script>
+                                       let socket;
+                                       let rematchTimeout;
 
-                                function rematch() {
-                                    clearTimeout(rematchTimeout);
-                                    socket.send('rematch');
-                                    document.getElementById('log').innerHTML = '';
-                                    document.getElementById('rematchButton').style.display = 'none';
-                                }
-                            </script>
-                        </head>
-                        <body onload='connect()'>
-                            <h1>Fight Lobby</h1>
-                            <div id='log'></div>
-                            <button id='rematchButton' style='display:none;' onclick='rematch()'>Rematch</button>
-                        </body>
-                    </html>";
-                }
-        */
+                                       function connect() {
+                                           socket = new WebSocket('ws://' + window.location.host + '/lobby3');
+                                           socket.onopen = function() {
+                                               console.log('Connected to WebSocket for fight.');
+                                               document.getElementById('log').innerHTML = '<p>Waiting for an opponent...</p>';
+                                           };
+                                           socket.onmessage = function(event) {
+                                               const logDiv = document.getElementById('log');
+                                               const message = event.data;
+                                               logDiv.innerHTML += `<p>${message}</p>`;
+                                               if (message.includes('Kampf beendet!')) {
+                                                   document.getElementById('rematchButton').style.display = 'block';
+                                                   rematchTimeout = setTimeout(() => {
+                                                       document.getElementById('rematchButton').style.display = 'none';
+                                                       socket.close();
+                                                   }, 20000);
+                                               }
+                                           };
+                                           socket.onclose = function() {
+                                               window.location.href = '/'; // Redirect to home page
+                                           };
+                                       }
+
+                                       function rematch() {
+                                           clearTimeout(rematchTimeout);
+                                           socket.send('rematch');
+                                           document.getElementById('log').innerHTML = '';
+                                           document.getElementById('rematchButton').style.display = 'none';
+                                       }
+                                   </script>
+                               </head>
+                               <body onload='connect()'>
+                                   <h1>Fight Lobby</h1>
+                                   <div id='log'></div>
+                                   <button id='rematchButton' style='display:none;' onclick='rematch()'>Rematch</button>
+                               </body>
+                           </html>";
+                       }
+               */
 
         private static string GetLocalIPAddress()
         {
