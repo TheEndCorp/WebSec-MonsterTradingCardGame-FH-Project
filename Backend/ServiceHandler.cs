@@ -97,7 +97,7 @@ namespace SemesterProjekt1
             }
 
             _users.Add(user);
-            _databaseHandler.UpdateUser(user);
+            _databaseHandler.SaveUsers(_users);
         }
 
         public User GetUserByName(string username)
