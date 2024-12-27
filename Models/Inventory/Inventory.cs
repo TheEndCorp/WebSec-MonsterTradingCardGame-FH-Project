@@ -57,7 +57,9 @@ namespace SemesterProjekt1
             while (amount > 0 && this.Money >= 5 * amount)
             {
                 CardPacks.Add(new CardPack(this.UserID));
+                Console.WriteLine(this.Money);
                 this.Money -= 5;
+                Console.WriteLine(this.Money);
                 amount--;
             }
         }

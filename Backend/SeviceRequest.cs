@@ -44,17 +44,15 @@ namespace SemesterProjekt1
                 case "/cards":
                     {
                         var user = await IsIdentiyYesUserCookie(request, response);
-                        if(user == null)
-                        { 
+                        if (user == null)
+                        {
                             SendErrorResponse(response, HttpStatusCode.Unauthorized);
                         }
-
                         else
-                        { 
-                        var allCards = _userServiceHandler.GetAllCards();
-                        string jsonResponse = SerializeToJson(allCards);
-                        SendResponse(response, jsonResponse, "application/json");
-                        
+                        {
+                            var allCards = _userServiceHandler.GetAllCards();
+                            string jsonResponse = SerializeToJson(allCards);
+                            SendResponse(response, jsonResponse, "application/json");
                         }
                         break;
                     }
@@ -134,12 +132,35 @@ namespace SemesterProjekt1
                     await HandleBuyPacksCURLAsync(request, response);
                     break;
 
+                case "/battles":
+                    await HandleBattleRequestAsync(request, response);
+                    break;
+
                 default:
                     response.WriteLine("HTTP/1.1 404 Not Found");
                     response.WriteLine("Content-Length: 0");
                     response.WriteLine();
                     response.Flush();
                     break;
+            }
+        }
+
+        private async Task HandleBattleRequestAsync(StreamReader request, StreamWriter response)
+        {
+            var user1 = await IsIdentiyYesUserCookie(request, response);
+            var user2 = await IsIdentiyYesUserCookie(request, response);
+
+            if (user1 != null && user2 != null)
+            {
+                var fightLogic = new FightLogic(user1, user2);
+                var battleResult = await fightLogic.StartBattleAsync();
+
+                string jsonResponse = SerializeToJson(battleResult);
+                SendResponse(response, jsonResponse, "application/json", HttpStatusCode.OK);
+            }
+            else
+            {
+                SendErrorResponse(response, HttpStatusCode.Unauthorized, "Invalid users for battle");
             }
         }
 
@@ -346,7 +367,7 @@ namespace SemesterProjekt1
                         return;
                     }
 
-                    _userServiceHandler.UpdateUser(user.Id, user);
+                    _userServiceHandler.UpdateUserInventory(user.Id, user);
 
                     string jsonResponse = SerializeToJson(new { message = "Packs bought successfully" });
                     writer.WriteLine("HTTP/1.1 200 OK");

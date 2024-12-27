@@ -136,5 +136,63 @@ namespace SemesterProjekt1
 
             await SendBattleLogAsync(player1Socket, player2Socket, battleLog.ToString());
         }
+
+        public async Task<Dictionary<string, string>> StartBattleAsync()
+        {
+            int round = 0;
+            StringBuilder battleLog = new StringBuilder();
+            Dictionary<string, string> result = new Dictionary<string, string>();
+
+            while (round < 100 && player1Deck.Count > 0 && player2Deck.Count > 0)
+            {
+                Card player1Card = player1Deck[random.Next(player1Deck.Count)];
+                Card player2Card = player2Deck[random.Next(player2Deck.Count)];
+
+                battleLog.AppendLine($"Runde {round + 1}: {player1Card.Name} vs {player2Card.Name}");
+
+                int player1Damage = CalculateDamage(player1Card, player2Card);
+                int player2Damage = CalculateDamage(player2Card, player1Card);
+
+                if (player1Damage > player2Damage)
+                {
+                    battleLog.AppendLine($"{player1Card.Name} gewinnt die Runde!");
+                    player1Deck.Add(player2Card);
+                    player2Deck.Remove(player2Card);
+                }
+                else if (player2Damage > player1Damage)
+                {
+                    battleLog.AppendLine($"{player2Card.Name} gewinnt die Runde!");
+                    player2Deck.Add(player1Card);
+                    player1Deck.Remove(player1Card);
+                }
+                else
+                {
+                    battleLog.AppendLine("Unentschieden!");
+                }
+
+                round++;
+            }
+
+            battleLog.AppendLine("Kampf beendet!");
+
+            if (player1Deck.Count > player2Deck.Count)
+            {
+                battleLog.AppendLine($"Spieler 1 ({User1.Username}) gewinnt den Kampf!");
+                result["winner"] = User1.Username;
+            }
+            else if (player2Deck.Count > player1Deck.Count)
+            {
+                battleLog.AppendLine($"Spieler 2 ({User2.Username}) gewinnt den Kampf!");
+                result["winner"] = User2.Username;
+            }
+            else
+            {
+                battleLog.AppendLine("Der Kampf endet unentschieden!");
+                result["winner"] = "draw";
+            }
+
+            result["log"] = battleLog.ToString();
+            return result;
+        }
     }
 }
