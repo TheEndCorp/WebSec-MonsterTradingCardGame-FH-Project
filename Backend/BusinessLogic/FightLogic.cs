@@ -5,12 +5,12 @@ namespace SemesterProjekt1
 {
     public class FightLogic : CardTypes
     {
-        private User User1;
-        private User User2;
         private List<Card> player1Deck;
         private List<Card> player2Deck;
         private Random random;
         public StringBuilder battleLog { get; set; }
+        public User User1;
+        public User User2;
 
         public FightLogic(User User1, User User2)
         {
@@ -124,10 +124,14 @@ namespace SemesterProjekt1
             if (player1Deck.Count > player2Deck.Count)
             {
                 battleLog.AppendLine($"Spieler 1 ({User1.Username}) gewinnt den Kampf!");
+                User1.Inventory.ELO += 3;
+                User2.Inventory.ELO -= 5;
             }
             else if (player2Deck.Count > player1Deck.Count)
             {
                 battleLog.AppendLine($"Spieler 2 ({User2.Username}) gewinnt den Kampf!");
+                User1.Inventory.ELO -= 5;
+                User2.Inventory.ELO += 3;
             }
             else
             {

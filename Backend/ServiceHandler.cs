@@ -132,6 +132,16 @@ namespace SemesterProjekt1
             }
         }
 
+        public void UpdateUserInventory(User updatedUser)
+        {
+            var user = GetUserById(updatedUser.Id);
+            if (user != null)
+            {
+                _databaseHandler.UpdateUser(updatedUser);
+                _users[_users.FindIndex(u => u.Id == updatedUser.Id)] = updatedUser;
+            }
+        }
+
         public void DeleteUser(int id)
         {
             var user = GetUserById(id);

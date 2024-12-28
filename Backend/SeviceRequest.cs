@@ -1,6 +1,7 @@
 ﻿using Npgsql.Internal;
 using System.Text;
 using System.Text.Json;
+using static Microsoft.ApplicationInsights.MetricDimensionNames.TelemetryContext;
 
 // 20 hours already Wasted from HTTPLISTENER -> TCP ANDWiwkndiunwaidon Day 3 Note of this shit
 // 25 and nearly finished
@@ -154,6 +155,12 @@ namespace SemesterProjekt1
             {
                 var fightLogic = new FightLogic(user1, user2);
                 var battleResult = await fightLogic.StartBattleAsync();
+
+                user1.Inventory.ELO = fightLogic.User1.Inventory.ELO;
+                user2.Inventory.ELO = fightLogic.User2.Inventory.ELO;
+
+                _userServiceHandler.UpdateUserInventory(user1);
+                _userServiceHandler.UpdateUserInventory(user2);
 
                 string jsonResponse = SerializeToJson(battleResult);
                 SendResponse(response, jsonResponse, "application/json", HttpStatusCode.OK);

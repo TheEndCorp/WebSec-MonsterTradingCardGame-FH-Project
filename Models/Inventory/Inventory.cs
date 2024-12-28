@@ -18,6 +18,7 @@ namespace SemesterProjekt1
             this.Deck = new Deck();
             this.CardPacks = new List<CardPack>();
             this.Money = 20;
+            this.ELO = 100;
             this.UserID = UserID;
         }
 
@@ -28,8 +29,9 @@ namespace SemesterProjekt1
             this.Deck = deck ?? new Deck();
             this.CardPacks = cardPacks ?? new List<CardPack>();
             this.Money = money;
-            this.UserID = userID;
             this.ELO = ELO;
+            this.UserID = userID;
+            
         }
 
         public void AddCardToOwnedCards(Card card)
