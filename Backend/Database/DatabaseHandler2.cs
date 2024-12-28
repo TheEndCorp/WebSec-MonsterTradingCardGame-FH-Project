@@ -169,6 +169,20 @@ namespace SemesterProjekt1
                 using (var connection = new NpgsqlConnection(_postgresConnectionString))
                 {
                     connection.Open();
+                    string selectInventory = "SELECT Money, ELO FROM Users WHERE Id = @UserID;";
+                    using (var command = new NpgsqlCommand(selectInventory, connection))
+                    {
+                        command.Parameters.AddWithValue("@UserID", userId);
+                        using (var reader = command.ExecuteReader())
+                        {
+                            if (reader.Read())
+                            {
+                                inventory.Money = reader.GetInt32(0);
+                                inventory.ELO = reader.GetInt32(1);
+                            }
+                        }
+                    }
+
                     string selectCards = "SELECT * FROM Cards WHERE UserID = @UserID;";
                     using (var command = new NpgsqlCommand(selectCards, connection))
                     {
@@ -224,6 +238,20 @@ namespace SemesterProjekt1
                 using (var connection = new SqliteConnection(_sqliteConnectionString))
                 {
                     connection.Open();
+                    string selectInventory = "SELECT Money, ELO FROM Users WHERE Id = @UserID;";
+                    using (var command = new SqliteCommand(selectInventory, connection))
+                    {
+                        command.Parameters.AddWithValue("@UserID", userId);
+                        using (var reader = command.ExecuteReader())
+                        {
+                            if (reader.Read())
+                            {
+                                inventory.Money = reader.GetInt32(0);
+                                inventory.ELO = reader.GetInt32(1);
+                            }
+                        }
+                    }
+
                     string selectCards = "SELECT * FROM Cards WHERE UserID = @UserID;";
                     using (var command = new SqliteCommand(selectCards, connection))
                     {

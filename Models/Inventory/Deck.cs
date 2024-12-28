@@ -26,7 +26,7 @@ namespace SemesterProjekt1
                 return false;
             }
 
-            if (Cards.Any(c => c.Name == card.Name))
+            if (Cards.Any(c => c.Name == card.Name) && Cards.Any(c => c.ID == card.ID))
             {
                 Console.WriteLine("Card already in deck.");
                 return false;

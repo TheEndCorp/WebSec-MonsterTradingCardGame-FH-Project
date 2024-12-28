@@ -24,7 +24,6 @@ namespace SemesterProjekt1
             listener.Start();
 
             Console.WriteLine($"Server gestartet auf http://{localIPAddress}:10001/");
-            PrintListeningAddresses();
 
             UserServiceRequest requester = new UserServiceRequest();
             //  SocketRequester socketRequester = new SocketRequester(requester._userServiceHandler);
@@ -48,21 +47,6 @@ namespace SemesterProjekt1
             var identity = WindowsIdentity.GetCurrent();
             var principal = new WindowsPrincipal(identity);
             return principal.IsInRole(WindowsBuiltInRole.Administrator);
-        }
-
-        private static void PrintListeningAddresses()
-        {
-            var host = Dns.GetHostName();
-            var ipAddresses = Dns.GetHostAddresses(host);
-
-            Console.WriteLine("Listening on the following addresses:");
-            foreach (var ipAddress in ipAddresses)
-            {
-                if (ipAddress.AddressFamily == AddressFamily.InterNetwork || ipAddress.AddressFamily == AddressFamily.InterNetworkV6)
-                {
-                    Console.WriteLine($"http://{ipAddress}:10001/");
-                }
-            }
         }
 
         private static async Task HandleClientAsync(TcpClient client, UserServiceRequest requester/*, SocketRequester socketRequester*/)

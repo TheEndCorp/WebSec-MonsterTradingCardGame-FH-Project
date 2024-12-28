@@ -21,8 +21,14 @@ namespace SemesterProjekt1
 
     public class UserServiceRequest
     {
-        private HTMLGEN _htmlgen = new HTMLGEN(new UserServiceHandler());
-        public UserServiceHandler _userServiceHandler = new UserServiceHandler();
+        private HTMLGEN _htmlgen;
+        public UserServiceHandler _userServiceHandler;
+
+        public UserServiceRequest()
+        {
+            _userServiceHandler = new UserServiceHandler();
+            _htmlgen = new HTMLGEN(_userServiceHandler);
+        }
 
         private async Task HandleGetRequestAsync(StreamReader request, StreamWriter response, string path1)
         {
@@ -88,6 +94,21 @@ namespace SemesterProjekt1
                     }
 
                 /////////////// CURL Functions
+
+                case "/stats":
+                    {
+                        var user = await IsIdentiyYesUserCookie(request, response);
+                        if (user == null)
+                        {
+                            SendErrorResponse(response, HttpStatusCode.Unauthorized);
+                        }
+                        else
+                        {
+                            string jsonResponse = SerializeToJson(user.Inventory.ELO);
+                            SendResponse(response, jsonResponse, "application/json");
+                        }
+                        break;
+                    }
 
                 default:
                     {
