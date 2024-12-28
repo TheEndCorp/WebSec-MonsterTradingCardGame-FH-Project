@@ -94,7 +94,13 @@ namespace SemesterProjekt1
                     }
 
                 /////////////// CURL Functions
-
+                case "/tradings":
+                    {
+                        var deals = _userServiceHandler.GetAllTradingDeals();
+                        string jsonResponse = SerializeToJson(deals);
+                        SendResponse(response, jsonResponse, "application/json");
+                        break;
+                    }
                 case "/stats":
                     {
                         var user = await IsIdentiyYesUserCookie(request, response);
@@ -145,6 +151,13 @@ namespace SemesterProjekt1
                     break;
 
                 /////////////// CURL Functions
+                case "/tradings":
+                    await HandleAddTradingDealAsync(request, response);
+                    break;
+
+                case string path when path1.StartsWith("/tradings/"):
+                    await HandleExecuteTradeAsync(request, response, path1);
+                    break;
 
                 case "/sessions":
                     await HandleLoginAsyncCURL(request, response);
@@ -797,6 +810,114 @@ namespace SemesterProjekt1
             writer.WriteLine($"HTTP/1.1  {statusCode}");
             writer.WriteLine("Content-Length: 0");
             writer.Flush();
+        }
+
+        private async Task HandleAddTradingDealAsync(StreamReader request, StreamWriter response)
+        {
+            var user = await IsIdentiyYesUserCookie(request, response);
+            if (user != null)
+            {
+                string requestBody = await ReadRequestBodyAsync(request, response);
+                var deal = JsonSerializer.Deserialize<TradingLogic>(requestBody);
+                if (deal != null)
+                {
+                    deal.UserId = user.Id;
+                    _userServiceHandler.AddTradingDeal(deal);
+                    SendResponse(response, "Trading deal created successfully", "application/text", HttpStatusCode.Created);
+                }
+                else
+                {
+                    SendErrorResponse(response, HttpStatusCode.BadRequest, "Invalid trading deal data");
+                }
+            }
+            else
+            {
+                SendErrorResponse(response, HttpStatusCode.Unauthorized, "Invalid user");
+            }
+        }
+
+        private async Task HandleExecuteTradeAsync(StreamReader request, StreamWriter response, string path)
+        {
+            var user = await IsIdentiyYesUserCookie(request, response);
+            if (user != null)
+            {
+                string dealIdString = path.Substring(10);
+                if (Guid.TryParse(dealIdString, out Guid dealId))
+                {
+                    string requestBody = await ReadRequestBodyAsync(request, response);
+                    if (long.TryParse(requestBody.Trim('"'), out long cardId))
+                    {
+                        if (user.Inventory.OwnedCards.Any(c => c.ID == cardId))
+                        {
+                            _userServiceHandler.ExecuteTrade(dealId, cardId, user.Id);
+                            SendResponse(response, "Trade executed successfully", "application/text", HttpStatusCode.OK);
+                        }
+                        else
+                        {
+                            SendErrorResponse(response, HttpStatusCode.BadRequest, "Card not found in user's inventory");
+                        }
+                    }
+                    else
+                    {
+                        SendErrorResponse(response, HttpStatusCode.BadRequest, "Invalid card ID");
+                    }
+                }
+                else
+                {
+                    SendErrorResponse(response, HttpStatusCode.BadRequest, "Invalid trading deal ID");
+                }
+            }
+            else
+            {
+                SendErrorResponse(response, HttpStatusCode.Unauthorized, "Invalid user");
+            }
+        }
+
+        private async Task HandleDeleteRequestAsync(StreamReader request, StreamWriter response, string path1)
+        {
+            switch (path1)
+            {
+                case string path when path1.StartsWith("/tradings/"):
+                    await HandleDeleteTradingDealAsync(request, response, path1);
+                    break;
+
+                default:
+                    response.WriteLine("HTTP/1.1 404 Not Found");
+                    response.WriteLine("Content-Length: 0");
+                    response.WriteLine();
+                    response.Flush();
+                    break;
+            }
+        }
+
+        private async Task HandleDeleteTradingDealAsync(StreamReader request, StreamWriter response, string path)
+        {
+            var user = await IsIdentiyYesUserCookie(request, response);
+            if (user != null)
+            {
+                string dealIdString = path.Substring(10);
+                if (Guid.TryParse(dealIdString, out Guid dealId))
+                {
+                    var deal = _userServiceHandler.GetTradingDealById(dealId);
+                    if (deal != null && deal.UserId == user.Id)
+                    {
+                        _userServiceHandler.DeleteTradingDeal(dealId);
+                        SendResponse(response, "Trading deal deleted successfully", "application/text", HttpStatusCode.OK);
+                    }
+                    else
+                    {
+                        SendErrorResponse(response, HttpStatusCode.BadRequest, "Trading deal not found or user not authorized");
+                    }
+                }
+                else
+                {
+                    SendErrorResponse(response, HttpStatusCode.BadRequest, "Invalid trading deal ID");
+                }
+            }
+            else
+            {
+                SendErrorResponse(response, HttpStatusCode.Unauthorized, "Invalid user");
+            }
         }
 
         public async Task HandleRequestAsync(StreamReader request, StreamWriter response, string method, string path)

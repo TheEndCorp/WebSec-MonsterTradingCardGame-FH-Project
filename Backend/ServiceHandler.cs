@@ -8,12 +8,14 @@ namespace SemesterProjekt1
         public List<User> _users;
         public List<Card> _cards;
         public DatabaseHandler2 _databaseHandler;
+        public List<TradingLogic> _tradingDeals;
 
         public UserServiceHandler()
         {
             _databaseHandler = new DatabaseHandler2();
             _users = _databaseHandler.LoadUsers();
             _lobby = new List<User>();
+            _tradingDeals = new List<TradingLogic>();
 
             if (_users.Count == 0)
             {
@@ -227,6 +229,57 @@ namespace SemesterProjekt1
                 }
             }
             return user;
+        }
+
+        public List<TradingLogic> GetAllTradingDeals()
+        {
+            return _tradingDeals;
+        }
+
+        public void AddTradingDeal(TradingLogic deal)
+        {
+            _tradingDeals.Add(deal);
+        }
+
+        public void DeleteTradingDeal(Guid id)
+        {
+            var deal = _tradingDeals.FirstOrDefault(d => d.Id == id);
+            if (deal != null)
+            {
+                _tradingDeals.Remove(deal);
+            }
+        }
+
+        public TradingLogic GetTradingDealById(Guid id)
+        {
+            return _tradingDeals.FirstOrDefault(d => d.Id == id);
+        }
+
+        public void ExecuteTrade(Guid dealId, long cardId, int userId)
+        {
+            var deal = GetTradingDealById(dealId);
+            if (deal != null)
+            {
+                var user = GetUserById(userId);
+                var card = user.Inventory.OwnedCards.FirstOrDefault(c => c.ID == cardId);
+
+                if (card != null && card.Damage >= deal.MinimumDamage && card.Type == (CardTypes.CardType)deal.Type)
+                {
+                    var owner = GetUserById(deal.UserId);
+                    var cardToTrade = owner.Inventory.OwnedCards.FirstOrDefault(c => c.ID == deal.CardToTrade);
+
+                    if (cardToTrade != null)
+                    {
+                        owner.Inventory.OwnedCards.Remove(cardToTrade);
+                        user.Inventory.OwnedCards.Remove(card);
+
+                        owner.Inventory.OwnedCards.Add(card);
+                        user.Inventory.OwnedCards.Add(cardToTrade);
+
+                        DeleteTradingDeal(dealId);
+                    }
+                }
+            }
         }
     }
 }
