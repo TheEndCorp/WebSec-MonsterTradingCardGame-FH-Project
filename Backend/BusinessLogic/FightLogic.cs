@@ -1,4 +1,4 @@
-﻿using System.Net.WebSockets;
+﻿// using System.Net.WebSockets;
 using System.Text;
 
 namespace SemesterProjekt1
@@ -22,7 +22,7 @@ namespace SemesterProjekt1
             this.battleLog = new StringBuilder();
         }
 
-        private async Task SendBattleLogAsync(WebSocket player1Socket, WebSocket player2Socket, string log)
+        /*private async Task SendBattleLogAsync(WebSocket player1Socket, WebSocket player2Socket, string log)
         {
             var buffer = Encoding.UTF8.GetBytes(log);
             var segment = new ArraySegment<byte>(buffer);
@@ -37,51 +37,9 @@ namespace SemesterProjekt1
                 await player2Socket.SendAsync(segment, WebSocketMessageType.Text, true, CancellationToken.None);
             }
         }
+        */
 
-        private int CalculateDamage(Card attacker, Card defender)
-        {
-            int damage = attacker.Damage;
-
-            if (attacker is SpellCard || defender is SpellCard)
-            {
-                if (attacker.Element == ElementType.Water && defender.Element == ElementType.Fire ||
-                    attacker.Element == ElementType.Fire && defender.Element == ElementType.Normal ||
-                    attacker.Element == ElementType.Normal && defender.Element == ElementType.Water)
-                {
-                    damage *= 2;
-                }
-                else if (attacker.Element == ElementType.Fire && defender.Element == ElementType.Water ||
-                         attacker.Element == ElementType.Normal && defender.Element == ElementType.Fire ||
-                         attacker.Element == ElementType.Water && defender.Element == ElementType.Normal)
-                {
-                    damage /= 2;
-                }
-            }
-
-            if (attacker.Name == "Goblin" && defender.Name == "Dragon")
-            {
-                damage = 0;
-            }
-            else if (attacker.Name == "Wizzard" && defender.Name == "Ork")
-            {
-                damage = 0;
-            }
-            else if (attacker.Name == "Knight" && defender is SpellCard && defender.Element == ElementType.Water)
-            {
-                damage = int.MaxValue; // Sofortige Niederlage
-            }
-            else if (attacker.Name == "Kraken" && defender is SpellCard)
-            {
-                damage = 0; // Immun gegen Zauber
-            }
-            else if (attacker.Name == "FireElf" && defender.Name == "Dragon")
-            {
-                damage = 0; // Weicht Angriffen aus
-            }
-
-            return damage;
-        }
-
+        /*
         public async Task StartBattleAsync(WebSocket player1Socket, WebSocket player2Socket)
         {
             int round = 0;
@@ -139,6 +97,51 @@ namespace SemesterProjekt1
             }
 
             await SendBattleLogAsync(player1Socket, player2Socket, battleLog.ToString());
+        }
+        */
+
+        private static int CalculateDamage(Card attacker, Card defender)
+        {
+            int damage = attacker.Damage;
+
+            if (attacker is SpellCard || defender is SpellCard)
+            {
+                if (attacker.Element == ElementType.Water && defender.Element == ElementType.Fire ||
+                    attacker.Element == ElementType.Fire && defender.Element == ElementType.Normal ||
+                    attacker.Element == ElementType.Normal && defender.Element == ElementType.Water)
+                {
+                    damage *= 2;
+                }
+                else if (attacker.Element == ElementType.Fire && defender.Element == ElementType.Water ||
+                         attacker.Element == ElementType.Normal && defender.Element == ElementType.Fire ||
+                         attacker.Element == ElementType.Water && defender.Element == ElementType.Normal)
+                {
+                    damage /= 2;
+                }
+            }
+
+            if (attacker.Name == "Goblin" && defender.Name == "Dragon")
+            {
+                damage = 0;
+            }
+            else if (attacker.Name == "Wizzard" && defender.Name == "Ork")
+            {
+                damage = 0;
+            }
+            else if (attacker.Name == "Knight" && defender is SpellCard && defender.Element == ElementType.Water)
+            {
+                damage = int.MaxValue; // Sofortige Niederlage
+            }
+            else if (attacker.Name == "Kraken" && defender is SpellCard)
+            {
+                damage = 0; // Immun gegen Zauber
+            }
+            else if (attacker.Name == "FireElf" && defender.Name == "Dragon")
+            {
+                damage = 0; // Weicht Angriffen aus
+            }
+
+            return damage;
         }
 
         public async Task<Dictionary<string, string>> StartBattleAsync()

@@ -1,7 +1,6 @@
 ﻿using Npgsql.Internal;
 using System.Text;
 using System.Text.Json;
-using static Microsoft.ApplicationInsights.MetricDimensionNames.TelemetryContext;
 
 // 20 hours already Wasted from HTTPLISTENER -> TCP ANDWiwkndiunwaidon Day 3 Note of this shit
 // 25 and nearly finished
@@ -227,6 +226,7 @@ namespace SemesterProjekt1
             {
                 SendErrorResponse(response, HttpStatusCode.BadRequest);
             }
+            await Task.CompletedTask; // Add this line to avoid CS1998 warning
         }
 
         private async Task HandleAddUserAsync(StreamReader request, StreamWriter response)
@@ -353,26 +353,27 @@ namespace SemesterProjekt1
 
         private async Task HandleOpenCardPackAsync(StreamReader reader, StreamWriter writer)
         {
-            var user = await IsIdentiyYesUserCookie(reader, writer);
+            var userinfo = await IsIdentiyYesUserCookie(reader, writer);
 
-            if (user != null)
+            if (userinfo != null)
             {
-                if (user.Inventory.CardPacks.Count > 0)
+                if (userinfo.Inventory.CardPacks.Count > 0)
                 {
-                    var firstCardPack = user.Inventory.CardPacks.First();
-                    user.Inventory.OpenCardPack(firstCardPack);
-                    user.Inventory.CardPacks.Remove(firstCardPack);
-                    user.Inventory.CardPacks = user.Inventory.CardPacks.OrderBy(pack => pack.UserID).ToList();
-                }
+                    List<Card> Liste = new List<Card>();
+                    Liste = _userServiceHandler.OpenCardPack(userinfo.Id, userinfo.Username, userinfo.Password);
 
-                string jsonResponse = SerializeToJson(user.Inventory.JustOpened);
-                writer.WriteLine("HTTP/1.1 200 OK");
-                writer.WriteLine("Content-Type: application/json");
-                writer.WriteLine($"Content-Length: {jsonResponse.Length}");
-                writer.WriteLine();
-                writer.WriteLine(jsonResponse);
-                writer.Flush();
-                user.Inventory.JustOpenedClear();
+                    string jsonResponse = SerializeToJson(Liste);
+                    writer.WriteLine("HTTP/1.1 200 OK");
+                    writer.WriteLine("Content-Type: application/json");
+                    writer.WriteLine($"Content-Length: {jsonResponse.Length}");
+                    writer.WriteLine();
+                    writer.WriteLine(jsonResponse);
+                    writer.Flush();
+                }
+                else
+                {
+                    SendErrorResponse(writer, HttpStatusCode.Conflict, "Nothing to Open");
+                }
             }
             else
             {
@@ -818,16 +819,41 @@ namespace SemesterProjekt1
             if (user != null)
             {
                 string requestBody = await ReadRequestBodyAsync(request, response);
-                var deal = JsonSerializer.Deserialize<TradingLogic>(requestBody);
-                if (deal != null)
+                try
                 {
-                    deal.UserId = user.Id;
-                    _userServiceHandler.AddTradingDeal(deal);
-                    SendResponse(response, "Trading deal created successfully", "application/text", HttpStatusCode.Created);
+                    var options = new JsonSerializerOptions
+                    {
+                        PropertyNameCaseInsensitive = true,
+                        Converters = { new TradingLogicJsonConverter() }
+                    };
+
+                    var deal = JsonSerializer.Deserialize<TradingLogic>(requestBody, options);
+                    if (deal != null)
+                    {
+                        deal.UserId = user.Id;
+                        try { _userServiceHandler.AddTradingDeal(deal, user); }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine($"Unexpected error: {ex.Message}");
+                            SendErrorResponse(response, HttpStatusCode.InternalServerError, $"Unexpected error: {ex.Message}");
+                        }
+
+                        SendResponse(response, "Trading deal created successfully", "application/text", HttpStatusCode.Created);
+                    }
+                    else
+                    {
+                        SendErrorResponse(response, HttpStatusCode.BadRequest, "Invalid trading deal data");
+                    }
                 }
-                else
+                catch (JsonException ex)
                 {
-                    SendErrorResponse(response, HttpStatusCode.BadRequest, "Invalid trading deal data");
+                    Console.WriteLine($"JSON deserialization error: {ex.Message}");
+                    SendErrorResponse(response, HttpStatusCode.BadRequest, $"Invalid JSON format: {ex.Message}");
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Unexpected error: {ex.Message}");
+                    SendErrorResponse(response, HttpStatusCode.InternalServerError, $"Unexpected error: {ex.Message}");
                 }
             }
             else

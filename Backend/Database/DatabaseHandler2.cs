@@ -95,6 +95,7 @@ namespace SemesterProjekt1
                         Type INTEGER NOT NULL,
                         RarityType INTEGER NOT NULL,
                         InDeck BOOLEAN NOT NULL,
+                        InTrade BOOLEAN NOT NULL,
                         UserID INTEGER NOT NULL,
                         FOREIGN KEY(UserID) REFERENCES Users(Id)
                     );";
@@ -140,6 +141,7 @@ namespace SemesterProjekt1
                         Type INTEGER NOT NULL,
                         RarityType INTEGER NOT NULL,
                         InDeck BOOLEAN NOT NULL,
+                        InTrade BOOLEAN NOT NULL,
                         UserID INTEGER NOT NULL,
                         FOREIGN KEY(UserID) REFERENCES Users(Id)
                     );";
@@ -198,15 +200,16 @@ namespace SemesterProjekt1
                                 CardType type = (CardType)reader.GetInt32(4);
                                 Rarity rarityType = (Rarity)reader.GetInt32(5);
                                 bool inDeck = reader.GetBoolean(6);
+                                bool inTrade = reader.GetBoolean(7);
 
                                 Card card;
                                 if (type == CardType.Spell)
                                 {
-                                    card = new SpellCard(id, name, damage, (CardTypes.ElementType)element, (CardTypes.Rarity)rarityType, inDeck, userId);
+                                    card = new SpellCard(id, name, damage, (CardTypes.ElementType)element, (CardTypes.Rarity)rarityType, inDeck, inTrade, userId);
                                 }
                                 else
                                 {
-                                    card = new MonsterCard(id, name, damage, (CardTypes.ElementType)element, (CardTypes.Rarity)rarityType, inDeck, userId);
+                                    card = new MonsterCard(id, name, damage, (CardTypes.ElementType)element, (CardTypes.Rarity)rarityType, inDeck, inTrade, userId);
                                 }
 
                                 inventory.AddCardToOwnedCards(card);
@@ -267,15 +270,16 @@ namespace SemesterProjekt1
                                 CardType type = (CardType)reader.GetInt32(4);
                                 Rarity rarityType = (Rarity)reader.GetInt32(5);
                                 bool inDeck = reader.GetBoolean(6);
+                                bool inTrade = reader.GetBoolean(7);
 
                                 Card card;
                                 if (type == CardType.Spell)
                                 {
-                                    card = new SpellCard(id, name, damage, (CardTypes.ElementType)element, (CardTypes.Rarity)rarityType, inDeck, userId);
+                                    card = new SpellCard(id, name, damage, (CardTypes.ElementType)element, (CardTypes.Rarity)rarityType, inDeck, inTrade, userId);
                                 }
                                 else
                                 {
-                                    card = new MonsterCard(id, name, damage, (CardTypes.ElementType)element, (CardTypes.Rarity)rarityType, inDeck, userId);
+                                    card = new MonsterCard(id, name, damage, (CardTypes.ElementType)element, (CardTypes.Rarity)rarityType, inDeck, inTrade, userId);
                                 }
 
                                 inventory.AddCardToOwnedCards(card);
@@ -312,9 +316,9 @@ namespace SemesterProjekt1
                 if (CardExists(card.ID, connection, transaction))
                 {
                     string updateCard = @"
-                    UPDATE Cards
-                    SET Name = @Name, Damage = @Damage, Element = @Element, Type = @Type, RarityType = @RarityType, InDeck = @InDeck, UserID = @UserID
-                    WHERE Id = @Id;";
+            UPDATE Cards
+            SET Name = @Name, Damage = @Damage, Element = @Element, Type = @Type, RarityType = @RarityType, InDeck = @InDeck, InTrade = @InTrade, UserID = @UserID
+            WHERE Id = @Id;";
                     using (var command = new SqliteCommand(updateCard, connection, transaction))
                     {
                         command.Parameters.AddWithValue("@Id", card.ID);
@@ -324,6 +328,7 @@ namespace SemesterProjekt1
                         command.Parameters.AddWithValue("@Type", (int)card.Type);
                         command.Parameters.AddWithValue("@RarityType", (int)card.RarityType);
                         command.Parameters.AddWithValue("@InDeck", card.InDeck);
+                        command.Parameters.AddWithValue("@InTrade", card.InTrade);
                         command.Parameters.AddWithValue("@UserID", card.UserID);
                         command.ExecuteNonQuery();
                     }
@@ -333,13 +338,14 @@ namespace SemesterProjekt1
                     int n = 1;
                     while (CardExists(card.ID, connection, transaction))
                     {
+                        Console.WriteLine("Card already exists, trying new ID");
                         card.ID += 1 + (n * n);
                         n++;
                     }
 
                     string insertCard = @"
-                    INSERT INTO Cards (Id, Name, Damage, Element, Type, RarityType, InDeck, UserID)
-                    VALUES (@Id, @Name, @Damage, @Element, @Type, @RarityType, @InDeck, @UserID);";
+            INSERT INTO Cards (Id, Name, Damage, Element, Type, RarityType, InDeck, InTrade, UserID)
+            VALUES (@Id, @Name, @Damage, @Element, @Type, @RarityType, @InDeck, @InTrade, @UserID);";
                     using (var command = new SqliteCommand(insertCard, connection, transaction))
                     {
                         command.Parameters.AddWithValue("@Id", card.ID);
@@ -349,6 +355,7 @@ namespace SemesterProjekt1
                         command.Parameters.AddWithValue("@Type", (int)card.Type);
                         command.Parameters.AddWithValue("@RarityType", (int)card.RarityType);
                         command.Parameters.AddWithValue("@InDeck", card.InDeck);
+                        command.Parameters.AddWithValue("@InTrade", card.InTrade);
                         command.Parameters.AddWithValue("@UserID", card.UserID);
                         command.ExecuteNonQuery();
                     }
@@ -367,8 +374,8 @@ namespace SemesterProjekt1
             foreach (var cardPack in inventory.CardPacks)
             {
                 string insertCardPack = @"
-                INSERT INTO CardPacks (UserID, Rarity)
-                VALUES (@UserID, @Rarity);";
+        INSERT INTO CardPacks (UserID, Rarity)
+        VALUES (@UserID, @Rarity);";
                 using (var command = new SqliteCommand(insertCardPack, connection, transaction))
                 {
                     command.Parameters.AddWithValue("@UserID", cardPack.UserID);
@@ -385,9 +392,9 @@ namespace SemesterProjekt1
                 if (CardExists(card.ID, connection, transaction))
                 {
                     string updateCard = @"
-                    UPDATE Cards
-                    SET Name = @Name, Damage = @Damage, Element = @Element, Type = @Type, RarityType = @RarityType, InDeck = @InDeck, UserID = @UserID
-                    WHERE Id = @Id;";
+            UPDATE Cards
+            SET Name = @Name, Damage = @Damage, Element = @Element, Type = @Type, RarityType = @RarityType, InDeck = @InDeck, InTrade = @InTrade, UserID = @UserID
+            WHERE Id = @Id;";
                     using (var command = new NpgsqlCommand(updateCard, connection, transaction))
                     {
                         command.Parameters.AddWithValue("@Id", card.ID);
@@ -397,6 +404,7 @@ namespace SemesterProjekt1
                         command.Parameters.AddWithValue("@Type", (int)card.Type);
                         command.Parameters.AddWithValue("@RarityType", (int)card.RarityType);
                         command.Parameters.AddWithValue("@InDeck", card.InDeck);
+                        command.Parameters.AddWithValue("@InTrade", card.InTrade);
                         command.Parameters.AddWithValue("@UserID", card.UserID);
                         command.ExecuteNonQuery();
                     }
@@ -411,9 +419,9 @@ namespace SemesterProjekt1
                     }
 
                     string insertCard = @"
-                    INSERT INTO Cards (Name, Damage, Element, Type, RarityType, InDeck, UserID)
-                    VALUES (@Name, @Damage, @Element, @Type, @RarityType, @InDeck, @UserID)
-                    RETURNING Id;";
+            INSERT INTO Cards (Name, Damage, Element, Type, RarityType, InDeck, InTrade, UserID)
+            VALUES (@Name, @Damage, @Element, @Type, @RarityType, @InDeck, @InTrade, @UserID)
+            RETURNING Id;";
                     using (var command = new NpgsqlCommand(insertCard, connection, transaction))
                     {
                         command.Parameters.AddWithValue("@Name", card.Name);
@@ -422,6 +430,7 @@ namespace SemesterProjekt1
                         command.Parameters.AddWithValue("@Type", (int)card.Type);
                         command.Parameters.AddWithValue("@RarityType", (int)card.RarityType);
                         command.Parameters.AddWithValue("@InDeck", card.InDeck);
+                        command.Parameters.AddWithValue("@InTrade", card.InTrade);
                         command.Parameters.AddWithValue("@UserID", card.UserID);
                         card.ID = (long)command.ExecuteScalar();
                     }
@@ -440,8 +449,8 @@ namespace SemesterProjekt1
             foreach (var cardPack in inventory.CardPacks)
             {
                 string insertCardPack = @"
-                INSERT INTO CardPacks (UserID, Rarity)
-                VALUES (@UserID, @Rarity);";
+        INSERT INTO CardPacks (UserID, Rarity)
+        VALUES (@UserID, @Rarity);";
                 using (var command = new NpgsqlCommand(insertCardPack, connection, transaction))
                 {
                     command.Parameters.AddWithValue("@UserID", cardPack.UserID);

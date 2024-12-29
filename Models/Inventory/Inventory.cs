@@ -31,7 +31,6 @@ namespace SemesterProjekt1
             this.Money = money;
             this.ELO = ELO;
             this.UserID = userID;
-            
         }
 
         public void AddCardToOwnedCards(Card card)
@@ -79,7 +78,8 @@ namespace SemesterProjekt1
 
         public void JustOpenedClear()
         {
-            JustOpened.Clear();
+            if (JustOpened == null) return;
+            else JustOpened.Clear();
         }
     }
 }

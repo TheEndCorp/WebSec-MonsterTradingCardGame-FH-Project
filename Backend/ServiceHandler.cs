@@ -1,4 +1,5 @@
-﻿using System.Net;
+﻿using System.Collections.Generic;
+using System.Net;
 
 namespace SemesterProjekt1
 {
@@ -130,7 +131,7 @@ namespace SemesterProjekt1
             if (user != null)
             {
                 _databaseHandler.UpdateUser(updatedUser);
-                _users[_users.FindIndex(u => u.Id == user.Id)] = updatedUser;
+                _users[_users.FindIndex(u => u.Id == updatedUser.Id)] = updatedUser;
             }
         }
 
@@ -179,21 +180,25 @@ namespace SemesterProjekt1
             return user;
         }
 
-        public User OpenCardPack(int userId, string username, string password)
+        public List<Card> OpenCardPack(int userId, string username, string password)
         {
             var user = _users.Find(p => p.Id == userId && p.Username == username && p.Password == password);
             if (user != null && AuthenticateUser(username, password) != null)
             {
                 if (user.Inventory.CardPacks.Count > 0)
                 {
-                    var cardPack = user.Inventory.CardPacks[0];
-                    user.Inventory.OpenCardPack(cardPack);
-                    user.Inventory.CardPacks.RemoveAt(0);
+                    user.Inventory.OpenCardPack(user.Inventory.CardPacks[0]);
+                    user.Inventory.CardPacks.Remove(user.Inventory.CardPacks[0]);
+                    List<Card> Liste = new List<Card>(user.Inventory.JustOpened);
+                    user.Inventory.JustOpenedClear();
+
                     _databaseHandler.UpdateUser(user);
                     _users[_users.FindIndex(u => u.Id == user.Id)] = user;
+
+                    return Liste;
                 }
             }
-            return user;
+            return null;
         }
 
         public void SaveDeck(int userId, List<Card> deck)
@@ -236,9 +241,17 @@ namespace SemesterProjekt1
             return _tradingDeals;
         }
 
-        public void AddTradingDeal(TradingLogic deal)
+        public void AddTradingDeal(TradingLogic deal, User user)
         {
-            _tradingDeals.Add(deal);
+            var cardToTrade = user.Inventory.OwnedCards.FirstOrDefault(c => c.ID == deal.CardToTrade);
+            if (cardToTrade != null)
+            {
+                _tradingDeals.Add(deal);
+            }
+            else
+            {
+                throw new InvalidOperationException("User does not own the card they want to trade.");
+            }
         }
 
         public void DeleteTradingDeal(Guid id)
