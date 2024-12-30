@@ -1,5 +1,4 @@
-﻿using System.Collections.Generic;
-using System.Net;
+﻿using System.Net;
 
 namespace SemesterProjekt1
 {
@@ -226,8 +225,15 @@ namespace SemesterProjekt1
                     var cardsList = user.Inventory.OwnedCards;
                     foreach (var pos in cardpos)
                     {
-                        user.Inventory.Deck.AddCard(cardsList[pos]);
-                        user.Inventory.OwnedCards[pos].InDeck = true;
+                        if (cardsList[pos].InTrade == true)
+                        {
+                            throw new InvalidOperationException("Card is in trade.");
+                        }
+                        else
+                        {
+                            user.Inventory.Deck.AddCard(cardsList[pos]);
+                            user.Inventory.OwnedCards[pos].InDeck = true;
+                        }
                     }
                     _databaseHandler.UpdateUser(user);
                     _users[_users.FindIndex(u => u.Id == user.Id)] = user;
@@ -247,6 +253,10 @@ namespace SemesterProjekt1
             if (cardToTrade != null)
             {
                 _tradingDeals.Add(deal);
+                user.Inventory.OwnedCards.First(c => c.ID == cardToTrade.ID).InTrade = true;
+
+                user.Inventory.Deck.Cards.Remove(cardToTrade);
+                user.Inventory.OwnedCards.First(c => c.ID == cardToTrade.ID).InDeck = false;
             }
             else
             {
@@ -288,6 +298,9 @@ namespace SemesterProjekt1
 
                         owner.Inventory.OwnedCards.Add(card);
                         user.Inventory.OwnedCards.Add(cardToTrade);
+
+                        owner.Inventory.OwnedCards.First(c => c.ID == card.ID).InTrade = false;
+                        user.Inventory.OwnedCards.First(c => c.ID == cardToTrade.ID).InTrade = false;
 
                         DeleteTradingDeal(dealId);
                     }
