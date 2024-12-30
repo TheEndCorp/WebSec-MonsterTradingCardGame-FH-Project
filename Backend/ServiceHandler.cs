@@ -257,6 +257,9 @@ namespace SemesterProjekt1
 
                 user.Inventory.Deck.Cards.Remove(cardToTrade);
                 user.Inventory.OwnedCards.First(c => c.ID == cardToTrade.ID).InDeck = false;
+
+                _databaseHandler.UpdateUser(user);
+                _databaseHandler.SaveTrade(_tradingDeals);
             }
             else
             {
@@ -303,6 +306,9 @@ namespace SemesterProjekt1
                         user.Inventory.OwnedCards.First(c => c.ID == cardToTrade.ID).InTrade = false;
 
                         DeleteTradingDeal(dealId);
+                        _databaseHandler.UpdateUser(owner);
+                        _databaseHandler.UpdateUser(user);
+                        _databaseHandler.SaveTrade(_tradingDeals);
                     }
                 }
             }

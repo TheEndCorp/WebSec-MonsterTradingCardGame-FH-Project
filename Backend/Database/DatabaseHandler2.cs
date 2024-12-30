@@ -1,5 +1,7 @@
 using Microsoft.Data.Sqlite;
 using Npgsql;
+using System.Transactions;
+using static Microsoft.ApplicationInsights.MetricDimensionNames.TelemetryContext;
 
 namespace SemesterProjekt1
 {
@@ -115,6 +117,21 @@ namespace SemesterProjekt1
             {
                 command.ExecuteNonQuery();
             }
+
+            string createTradesTable = @"
+        CREATE TABLE IF NOT EXISTS Trades (
+            Id UUID PRIMARY KEY,
+            CardToTrade BIGINT NOT NULL,
+            Type INTEGER NOT NULL,
+            MinimumDamage INTEGER NOT NULL,
+            UserId INTEGER NOT NULL,
+            FOREIGN KEY(UserId) REFERENCES Users(Id),
+            FOREIGN KEY(CardToTrade) REFERENCES Cards(Id)
+        );";
+            using (var command = new NpgsqlCommand(createTradesTable, connection))
+            {
+                command.ExecuteNonQuery();
+            }
         }
 
         private void InitializeSqliteDatabase(SqliteConnection connection)
@@ -158,6 +175,20 @@ namespace SemesterProjekt1
                         FOREIGN KEY(UserID) REFERENCES Users(Id)
                     );";
             using (var command = new SqliteCommand(createCardPacksTable, connection))
+            {
+                command.ExecuteNonQuery();
+            }
+            string createTradesTable = @"
+        CREATE TABLE IF NOT EXISTS Trades (
+            Id TEXT PRIMARY KEY,
+            CardToTrade INTEGER NOT NULL,
+            Type INTEGER NOT NULL,
+            MinimumDamage INTEGER NOT NULL,
+            UserId INTEGER NOT NULL,
+            FOREIGN KEY(UserId) REFERENCES Users(Id),
+            FOREIGN KEY(CardToTrade) REFERENCES Cards(Id)
+        );";
+            using (var command = new SqliteCommand(createTradesTable, connection))
             {
                 command.ExecuteNonQuery();
             }
@@ -700,6 +731,115 @@ namespace SemesterProjekt1
                 }
             }
             return user;
+        }
+
+        public void SaveTrade(List<TradingLogic> trades)
+        {
+            if (_usePostgres)
+            {
+                using (var connection = new NpgsqlConnection(_postgresConnectionString))
+                {
+                    connection.Open();
+                    using (var transaction = connection.BeginTransaction())
+                    {
+                        foreach (var trade in trades)
+                        {
+                            connection.Open();
+                            string insertTrade = @"
+                        INSERT INTO Trades (Id, CardToTrade, Type, MinimumDamage, UserId)
+                        VALUES (@Id, @CardToTrade, @Type, @MinimumDamage, @UserId);";
+                            using (var command = new NpgsqlCommand(insertTrade, connection))
+                            {
+                                command.Parameters.AddWithValue("@Id", trade.Id);
+                                command.Parameters.AddWithValue("@CardToTrade", trade.CardToTrade);
+                                command.Parameters.AddWithValue("@Type", (int)trade.Type);
+                                command.Parameters.AddWithValue("@MinimumDamage", trade.MinimumDamage);
+                                command.Parameters.AddWithValue("@UserId", trade.UserId);
+                                command.ExecuteNonQuery();
+                            }
+                        }
+                        transaction.Commit();
+                    }
+                }
+            }
+            else
+            {
+                using (var connection = new SqliteConnection(_sqliteConnectionString))
+                {
+                    connection.Open();
+                    using (var transaction = connection.BeginTransaction())
+                    {
+                        foreach (var trade in trades)
+                        {
+                            string insertTrade = @"
+                          INSERT INTO Trades (Id, CardToTrade, Type, MinimumDamage, UserId)
+                           VALUES (@Id, @CardToTrade, @Type, @MinimumDamage, @UserId);";
+                            using (var command = new SqliteCommand(insertTrade, connection))
+                            {
+                                command.Parameters.AddWithValue("@Id", trade.Id.ToString());
+                                command.Parameters.AddWithValue("@CardToTrade", trade.CardToTrade);
+                                command.Parameters.AddWithValue("@Type", (int)trade.Type);
+                                command.Parameters.AddWithValue("@MinimumDamage", trade.MinimumDamage);
+                                command.Parameters.AddWithValue("@UserId", trade.UserId);
+                                command.ExecuteNonQuery();
+                            }
+                        }
+                        transaction.Commit();
+                    }
+                }
+            }
+        }
+
+        public List<TradingLogic> LoadTrades()
+        {
+            var trades = new List<TradingLogic>();
+            if (_usePostgres)
+            {
+                using (var connection = new NpgsqlConnection(_postgresConnectionString))
+                {
+                    connection.Open();
+                    string selectTrades = "SELECT * FROM Trades;";
+                    using (var command = new NpgsqlCommand(selectTrades, connection))
+                    using (var reader = command.ExecuteReader())
+                    {
+                        while (reader.Read())
+                        {
+                            var trade = new TradingLogic(
+                                reader.GetGuid(0),
+                                reader.GetInt64(1),
+                                (CardType)reader.GetInt32(2),
+                                reader.GetInt32(3),
+                                reader.GetInt32(4)
+                            );
+                            trades.Add(trade);
+                        }
+                    }
+                }
+            }
+            else
+            {
+                using (var connection = new SqliteConnection(_sqliteConnectionString))
+                {
+                    connection.Open();
+                    string selectTrades = "SELECT * FROM Trades;";
+                    using (var command = new SqliteCommand(selectTrades, connection))
+                    using (var reader = command.ExecuteReader())
+                    {
+                        while (reader.Read())
+                        {
+                            var trade = new TradingLogic(
+                                Guid.Parse(reader.GetString(0)),
+                                reader.GetInt64(1),
+                                (CardType)reader.GetInt32(2),
+                                reader.GetInt32(3),
+                                reader.GetInt32(4)
+                            );
+                            trades.Add(trade);
+                        }
+                    }
+                }
+            }
+            return trades;
         }
     }
 }
