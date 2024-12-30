@@ -23,15 +23,15 @@ Users can:
 - acquire some cards,
 - define a deck of monsters/spells,
 - battle against another user
-- (FUTURE FEATURE) compare their stats in the score-board.
-- (FUTURE FEATURE) trade cards to have better chances to win (see detail description below).
+- compare their stats in the score-board.
+- trade cards to have better chances to win (see detail description below).
 
 Further Features:
-- (FUTURE FEATURE)  display a scoreboard (= sorted list of ELO values)
+- display a scoreboard (= sorted list of ELO values)
 - (FUTURE FEATURE)  editable profile page
-- (FUTURE FEATURE)  user stats – especially ELO calculation (+3 points for win, -5 for loss, starting value: 100;
+- user stats – especially ELO calculation (+3 points for win, -5 for loss, starting value: 100;
 higher sophisticated ELO system welcome)
-- (FUTURE HALF FINISHED FEATURE)  security check (using the token that is retrieved at login on the server-side, so that user
+- security check (using the token that is retrieved at login on the server-side, so that user
 actions can only be performed by the corresponding user itself)
 
 
