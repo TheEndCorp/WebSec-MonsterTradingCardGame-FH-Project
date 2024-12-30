@@ -9,12 +9,20 @@ namespace SemesterProjekt1
         public new Rarity Rarity { get; set; }
         public int UserID { get; set; }
         public int Price { get; }
+        public List<Card> Cards { get; set; }
 
         public CardPack(int userID)
         {
             UserID = userID;
             Rarity = GenerateRandomRarity();
             Price = 5;
+        }
+
+        public CardPack(List<Card> Cards)
+        {
+            this.Rarity = 0;
+            this.Price = 5;
+            this.Cards = Cards;
         }
 
         [JsonConstructor]
@@ -44,7 +52,7 @@ namespace SemesterProjekt1
 
         private Card GenerateRandomCard(int userID)
         {
-            long id = _random?.Value?.NextInt64(0, long.MaxValue) ?? 0;
+            Guid id = Guid.NewGuid();
             var element = (ElementType)(_random?.Value?.Next(0, Enum.GetValues(typeof(ElementType)).Length) ?? 0);
             var type = (CardType)(_random?.Value?.Next(0, Enum.GetValues(typeof(CardType)).Length) ?? 0);
             var rarity = (Rarity)(_random?.Value?.Next(1, Enum.GetValues(typeof(Rarity)).Length) ?? 1);
@@ -69,8 +77,19 @@ namespace SemesterProjekt1
 
         public List<Card> OpenCardPack(int userId)
         {
-            var cards = GenerateCards(5 * ((int)Rarity / 2), userId);
-            return cards;
+            if (this.Cards == null)
+            {
+                var cards = GenerateCards(5 * ((int)Rarity / 2), userId);
+                return cards;
+            }
+            else
+            {
+                foreach (var card in this.Cards)
+                {
+                    card.UserID = userId;
+                }
+                return this.Cards;
+            }
         }
     }
 }

@@ -9,6 +9,7 @@ namespace SemesterProjekt1
         public List<Card> _cards;
         public DatabaseHandler2 _databaseHandler;
         public List<TradingLogic> _tradingDeals;
+        public List<CardPack> _admingeneratedcardpacks;
 
         public UserServiceHandler()
         {
@@ -112,7 +113,7 @@ namespace SemesterProjekt1
             var user = GetUserById(id);
             if (!IsValidInput(user.Username) || !IsValidInput(user.Password))
             {
-                throw new InvalidOperationException("Ein Benutzer mit diesem Benutzernamen existiert bereits.");
+                throw new InvalidOperationException("Not Valid Input.");
             }
             if (user != null)
             {
@@ -281,7 +282,7 @@ namespace SemesterProjekt1
             return _tradingDeals.FirstOrDefault(d => d.Id == id);
         }
 
-        public void ExecuteTrade(Guid dealId, long cardId, int userId)
+        public void ExecuteTrade(Guid dealId, Guid cardId, int userId)
         {
             var deal = GetTradingDealById(dealId);
             if (deal != null)

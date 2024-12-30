@@ -870,7 +870,7 @@ namespace SemesterProjekt1
                 if (Guid.TryParse(dealIdString, out Guid dealId))
                 {
                     string requestBody = await ReadRequestBodyAsync(request, response);
-                    if (long.TryParse(requestBody.Trim('"'), out long cardId))
+                    if (Guid.TryParse(requestBody.Trim('"'), out Guid cardId))
                     {
                         if (user.Inventory.OwnedCards.Any(c => c.ID == cardId))
                         {

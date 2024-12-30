@@ -7,12 +7,12 @@ namespace SemesterProjekt1
     public class TradingLogic
     {
         public Guid Id { get; set; }
-        public long CardToTrade { get; set; }
+        public Guid CardToTrade { get; set; }
         public CardType Type { get; set; }
         public int MinimumDamage { get; set; }
         public int UserId { get; set; }
 
-        public TradingLogic(Guid id, long cardToTrade, CardType type, int minimumDamage, int userId)
+        public TradingLogic(Guid id, Guid cardToTrade, CardType type, int minimumDamage, int userId)
         {
             Id = id;
             CardToTrade = cardToTrade;
@@ -27,7 +27,7 @@ namespace SemesterProjekt1
         public override TradingLogic Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
         {
             Guid id = Guid.Empty;
-            long cardToTrade = 0;
+            Guid cardToTrade = Guid.Empty;
             CardType type = CardType.Monster;
             int minimumDamage = 0;
             int userId = 0;
@@ -55,7 +55,7 @@ namespace SemesterProjekt1
                             case "CardToTrade":
 
                                 var cardtoTradeSting = reader.GetString();
-                                if (!long.TryParse(cardtoTradeSting, out cardToTrade))
+                                if (!Guid.TryParse(cardtoTradeSting, out cardToTrade))
                                 {
                                     throw new JsonException($"Invalid value for CardToTrade: {cardtoTradeSting}");
                                 }
@@ -100,7 +100,7 @@ namespace SemesterProjekt1
         {
             writer.WriteStartObject();
             writer.WriteString("Id", value.Id);
-            writer.WriteNumber("CardToTrade", value.CardToTrade);
+            writer.WriteString("CardToTrade", value.CardToTrade.ToString());
             writer.WriteNumber("Type", (int)value.Type);
             writer.WriteNumber("MinimumDamage", value.MinimumDamage);
             writer.WriteNumber("UserId", value.UserId);

@@ -89,18 +89,18 @@ namespace SemesterProjekt1
             }
 
             string createCardsTable = @"
-                    CREATE TABLE IF NOT EXISTS Cards (
-                        Id SERIAL PRIMARY KEY,
-                        Name TEXT NOT NULL,
-                        Damage INTEGER NOT NULL,
-                        Element INTEGER NOT NULL,
-                        Type INTEGER NOT NULL,
-                        RarityType INTEGER NOT NULL,
-                        InDeck BOOLEAN NOT NULL,
-                        InTrade BOOLEAN NOT NULL,
-                        UserID INTEGER NOT NULL,
-                        FOREIGN KEY(UserID) REFERENCES Users(Id)
-                    );";
+                CREATE TABLE IF NOT EXISTS Cards (
+                    Id UUID PRIMARY KEY,
+                    Name TEXT NOT NULL,
+                    Damage INTEGER NOT NULL,
+                    Element INTEGER NOT NULL,
+                    Type INTEGER NOT NULL,
+                    RarityType INTEGER NOT NULL,
+                    InDeck BOOLEAN NOT NULL,
+                    InTrade BOOLEAN NOT NULL,
+                    UserID INTEGER NOT NULL,
+                    FOREIGN KEY(UserID) REFERENCES Users(Id)
+                );";
             using (var command = new NpgsqlCommand(createCardsTable, connection))
             {
                 command.ExecuteNonQuery();
@@ -150,18 +150,18 @@ namespace SemesterProjekt1
             }
 
             string createCardsTable = @"
-                    CREATE TABLE IF NOT EXISTS Cards (
-                        Id INTEGER PRIMARY KEY,
-                        Name TEXT NOT NULL,
-                        Damage INTEGER NOT NULL,
-                        Element INTEGER NOT NULL,
-                        Type INTEGER NOT NULL,
-                        RarityType INTEGER NOT NULL,
-                        InDeck BOOLEAN NOT NULL,
-                        InTrade BOOLEAN NOT NULL,
-                        UserID INTEGER NOT NULL,
-                        FOREIGN KEY(UserID) REFERENCES Users(Id)
-                    );";
+                CREATE TABLE IF NOT EXISTS Cards (
+                    Id UUID PRIMARY KEY,
+                    Name TEXT NOT NULL,
+                    Damage INTEGER NOT NULL,
+                    Element INTEGER NOT NULL,
+                    Type INTEGER NOT NULL,
+                    RarityType INTEGER NOT NULL,
+                    InDeck BOOLEAN NOT NULL,
+                    InTrade BOOLEAN NOT NULL,
+                    UserID INTEGER NOT NULL,
+                    FOREIGN KEY(UserID) REFERENCES Users(Id)
+                );";
             using (var command = new SqliteCommand(createCardsTable, connection))
             {
                 command.ExecuteNonQuery();
@@ -180,7 +180,7 @@ namespace SemesterProjekt1
             }
             string createTradesTable = @"
         CREATE TABLE IF NOT EXISTS Trades (
-            Id TEXT PRIMARY KEY,
+            Id UUID PRIMARY KEY,
             CardToTrade INTEGER NOT NULL,
             Type INTEGER NOT NULL,
             MinimumDamage INTEGER NOT NULL,
@@ -224,7 +224,7 @@ namespace SemesterProjekt1
                         {
                             while (reader.Read())
                             {
-                                long id = reader.GetInt64(0);
+                                Guid id = reader.GetGuid(0);
                                 string name = reader.GetString(1);
                                 int damage = reader.GetInt32(2);
                                 ElementType element = (ElementType)reader.GetInt32(3);
@@ -294,7 +294,7 @@ namespace SemesterProjekt1
                         {
                             while (reader.Read())
                             {
-                                long id = reader.GetInt64(0);
+                                Guid id = reader.GetGuid(0);
                                 string name = reader.GetString(1);
                                 int damage = reader.GetInt32(2);
                                 ElementType element = (ElementType)reader.GetInt32(3);
@@ -366,12 +366,10 @@ namespace SemesterProjekt1
                 }
                 else
                 {
-                    int n = 1;
                     while (CardExists(card.ID, connection, transaction))
                     {
                         Console.WriteLine("Card already exists, trying new ID");
-                        card.ID += 1 + (n * n);
-                        n++;
+                        card.ID = Guid.NewGuid();
                     }
 
                     string insertCard = @"
@@ -442,11 +440,9 @@ namespace SemesterProjekt1
                 }
                 else
                 {
-                    int n = 1;
                     while (CardExists(card.ID, connection, transaction))
                     {
-                        card.ID += 1 + (n * n);
-                        n++;
+                        card.ID = Guid.NewGuid();
                     }
 
                     string insertCard = @"
@@ -463,7 +459,7 @@ namespace SemesterProjekt1
                         command.Parameters.AddWithValue("@InDeck", card.InDeck);
                         command.Parameters.AddWithValue("@InTrade", card.InTrade);
                         command.Parameters.AddWithValue("@UserID", card.UserID);
-                        card.ID = (long)command.ExecuteScalar();
+                        card.ID = (Guid)command.ExecuteScalar();
                     }
                 }
             }
@@ -491,7 +487,7 @@ namespace SemesterProjekt1
             }
         }
 
-        private bool CardExists(long id, SqliteConnection connection, SqliteTransaction transaction)
+        private bool CardExists(Guid id, SqliteConnection connection, SqliteTransaction transaction)
         {
             string checkCardExists = "SELECT COUNT(1) FROM Cards WHERE Id = @Id;";
             using (var command = new SqliteCommand(checkCardExists, connection, transaction))
@@ -501,7 +497,7 @@ namespace SemesterProjekt1
             }
         }
 
-        private bool CardExists(long id, NpgsqlConnection connection, NpgsqlTransaction transaction)
+        private bool CardExists(Guid id, NpgsqlConnection connection, NpgsqlTransaction transaction)
         {
             string checkCardExists = "SELECT COUNT(1) FROM Cards WHERE Id = @Id;";
             using (var command = new NpgsqlCommand(checkCardExists, connection, transaction))
@@ -806,7 +802,7 @@ namespace SemesterProjekt1
                         {
                             var trade = new TradingLogic(
                                 reader.GetGuid(0),
-                                reader.GetInt64(1),
+                                Guid.Parse(reader.GetString(1)),
                                 (CardType)reader.GetInt32(2),
                                 reader.GetInt32(3),
                                 reader.GetInt32(4)
@@ -829,7 +825,7 @@ namespace SemesterProjekt1
                         {
                             var trade = new TradingLogic(
                                 Guid.Parse(reader.GetString(0)),
-                                reader.GetInt64(1),
+                                Guid.Parse(reader.GetString(1)),
                                 (CardType)reader.GetInt32(2),
                                 reader.GetInt32(3),
                                 reader.GetInt32(4)
