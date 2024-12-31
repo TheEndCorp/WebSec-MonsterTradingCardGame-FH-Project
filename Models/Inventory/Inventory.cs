@@ -47,10 +47,25 @@ namespace SemesterProjekt1
 
         public void AddCardPack(CardPack cardPack)
         {
-            CardPacks.Add(new CardPack(this.UserID));
+            CardPacks.Add(cardPack);
         }
 
         public void AddCardPack(CardPack cardPack, int amount)
+        {
+            if (amount <= 0) throw new ArgumentException("Amount must be greater than zero.");
+            if (this.Money < 5 * amount) throw new InvalidOperationException("Not enough money to buy the card packs.");
+
+            while (amount > 0 && this.Money >= 5 * amount)
+            {
+                CardPacks.Add(cardPack);
+                Console.WriteLine(this.Money);
+                this.Money -= 5;
+                Console.WriteLine(this.Money);
+                amount--;
+            }
+        }
+
+        public void AddCardPack(int amount)
         {
             if (amount <= 0) throw new ArgumentException("Amount must be greater than zero.");
             if (this.Money < 5 * amount) throw new InvalidOperationException("Not enough money to buy the card packs.");

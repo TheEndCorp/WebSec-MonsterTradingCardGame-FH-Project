@@ -1,7 +1,10 @@
 using Microsoft.Data.Sqlite;
+using Newtonsoft.Json;
 using Npgsql;
-using System.Transactions;
-using static Microsoft.ApplicationInsights.MetricDimensionNames.TelemetryContext;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using static SemesterProjekt1.CardData;
+using static SemesterProjekt1.CardTypes;
 
 namespace SemesterProjekt1
 {
@@ -111,7 +114,8 @@ namespace SemesterProjekt1
                         Id SERIAL PRIMARY KEY,
                         UserID INTEGER NOT NULL,
                         Rarity INTEGER NOT NULL,
-                        FOREIGN KEY(UserID) REFERENCES Users(Id)
+                        FOREIGN KEY(UserID) REFERENCES Users(Id),
+                        Cards JSONB
                     );";
             using (var command = new NpgsqlCommand(createCardPacksTable, connection))
             {
@@ -172,6 +176,7 @@ namespace SemesterProjekt1
                         Id INTEGER PRIMARY KEY AUTOINCREMENT,
                         UserID INTEGER NOT NULL,
                         Rarity INTEGER NOT NULL,
+                        Cards TEXT,
                         FOREIGN KEY(UserID) REFERENCES Users(Id)
                     );";
             using (var command = new SqliteCommand(createCardPacksTable, connection))
@@ -260,8 +265,27 @@ namespace SemesterProjekt1
                         {
                             while (reader.Read())
                             {
-                                Rarity rarity = (Rarity)reader.GetInt32(2);
-                                inventory.AddCardPack(new CardPack(userId, (CardTypes.Rarity)rarity));
+                                string cardsJson = reader.GetString(3);
+
+                                if (cardsJson == null)
+                                {
+                                    Rarity rarity = (Rarity)reader.GetInt32(2);
+                                    inventory.AddCardPack(new CardPack(userId, (CardTypes.Rarity)rarity));
+                                }
+                                else
+                                {
+                                    var cards = System.Text.Json.JsonSerializer.Deserialize<List<Card>>(cardsJson, new JsonSerializerOptions { Converters = { new CardConverter(), new JsonStringEnumConverter() } });
+
+                                    if (cards == null)
+                                    {
+                                        Rarity rarity = (Rarity)reader.GetInt32(2);
+                                        inventory.AddCardPack(new CardPack(userId, (CardTypes.Rarity)rarity));
+                                    }
+                                    else
+                                    {
+                                        inventory.AddCardPack(new CardPack(cards, userId));
+                                    }
+                                }
                             }
                         }
                     }
@@ -330,8 +354,26 @@ namespace SemesterProjekt1
                         {
                             while (reader.Read())
                             {
-                                Rarity rarity = (Rarity)reader.GetInt32(2);
-                                inventory.AddCardPack(new CardPack(userId, (CardTypes.Rarity)rarity));
+                                string cardsJson = reader.GetString(3);
+
+                                if (cardsJson == null)
+                                {
+                                    Rarity rarity = (Rarity)reader.GetInt32(2);
+                                    inventory.AddCardPack(new CardPack(userId, (CardTypes.Rarity)rarity));
+                                }
+                                else
+                                {
+                                    var cards = System.Text.Json.JsonSerializer.Deserialize<List<Card>>(cardsJson, new JsonSerializerOptions { Converters = { new CardConverter(), new JsonStringEnumConverter() } });
+                                    if (cards == null)
+                                    {
+                                        Rarity rarity = (Rarity)reader.GetInt32(2);
+                                        inventory.AddCardPack(new CardPack(userId, (CardTypes.Rarity)rarity));
+                                    }
+                                    else
+                                    {
+                                        inventory.AddCardPack(new CardPack(cards, userId));
+                                    }
+                                }
                             }
                         }
                     }
@@ -402,13 +444,15 @@ namespace SemesterProjekt1
             // Insert new CardPacks
             foreach (var cardPack in inventory.CardPacks)
             {
+                string cardsJson = System.Text.Json.JsonSerializer.Serialize(cardPack.Cards, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
                 string insertCardPack = @"
-        INSERT INTO CardPacks (UserID, Rarity)
-        VALUES (@UserID, @Rarity);";
+            INSERT INTO CardPacks (UserID, Rarity, Cards)
+            VALUES (@UserID, @Rarity, @Cards);";
                 using (var command = new SqliteCommand(insertCardPack, connection, transaction))
                 {
                     command.Parameters.AddWithValue("@UserID", cardPack.UserID);
                     command.Parameters.AddWithValue("@Rarity", (int)cardPack.Rarity);
+                    command.Parameters.AddWithValue("@Cards", cardsJson);
                     command.ExecuteNonQuery();
                 }
             }
@@ -475,13 +519,15 @@ namespace SemesterProjekt1
             // Insert new CardPacks
             foreach (var cardPack in inventory.CardPacks)
             {
+                string cardsJson = System.Text.Json.JsonSerializer.Serialize(cardPack.Cards, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
                 string insertCardPack = @"
-        INSERT INTO CardPacks (UserID, Rarity)
-        VALUES (@UserID, @Rarity);";
+            INSERT INTO CardPacks (UserID, Rarity, Cards)
+            VALUES (@UserID, @Rarity, @Cards);";
                 using (var command = new NpgsqlCommand(insertCardPack, connection, transaction))
                 {
                     command.Parameters.AddWithValue("@UserID", cardPack.UserID);
                     command.Parameters.AddWithValue("@Rarity", (int)cardPack.Rarity);
+                    command.Parameters.AddWithValue("@Cards", cardsJson);
                     command.ExecuteNonQuery();
                 }
             }

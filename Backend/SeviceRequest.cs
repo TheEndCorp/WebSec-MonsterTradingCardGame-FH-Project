@@ -169,6 +169,10 @@ namespace SemesterProjekt1
                     await HandleBattleRequestAsync(request, response);
                     break;
 
+                case "/packages":
+                    await HandleAddPackagesAsync(request, response);
+                    break;
+
                 default:
                     response.WriteLine("HTTP/1.1 404 Not Found");
                     response.WriteLine("Content-Length: 0");
@@ -401,7 +405,7 @@ namespace SemesterProjekt1
 
                 if (amount > 0)
                 {
-                    try { user.Inventory.AddCardPack(new CardPack(user.Id), amount); }
+                    try { _userServiceHandler.BuyPacks(user.Id, amount, user.Username, user.Password); }
                     catch (InvalidOperationException ex)
                     {
                         SendErrorResponse(writer, HttpStatusCode.BadRequest, ex.Message);
@@ -942,6 +946,43 @@ namespace SemesterProjekt1
             else
             {
                 SendErrorResponse(response, HttpStatusCode.Unauthorized, "Invalid user");
+            }
+        }
+
+        private async Task HandleAddPackagesAsync(StreamReader request, StreamWriter response)
+        {
+            var user = await IsIdentiyYesUserCookie(request, response);
+            if (user != null && user.Username == "admin")
+            {
+                string requestBody = await ReadRequestBodyAsync(request, response);
+                try
+                {
+                    var cardDataList = JsonSerializer.Deserialize<List<CardData>>(requestBody);
+                    if (cardDataList != null)
+                    {
+                        var cards = cardDataList.Select(data => CardCreator9000.CreateCard(data)).ToList();
+                        _userServiceHandler.CreatePack(cards);
+                        SendResponse(response, "Packages added successfully", "application/json", HttpStatusCode.Created);
+                    }
+                    else
+                    {
+                        SendErrorResponse(response, HttpStatusCode.BadRequest, "Invalid package data");
+                    }
+                }
+                catch (JsonException ex)
+                {
+                    Console.WriteLine($"JSON deserialization error: {ex.Message}");
+                    SendErrorResponse(response, HttpStatusCode.BadRequest, $"Invalid JSON format: {ex.Message}");
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Unexpected error: {ex.Message}");
+                    SendErrorResponse(response, HttpStatusCode.InternalServerError, $"Unexpected error: {ex.Message}");
+                }
+            }
+            else
+            {
+                SendErrorResponse(response, HttpStatusCode.Unauthorized, "Unauthorized user");
             }
         }
 

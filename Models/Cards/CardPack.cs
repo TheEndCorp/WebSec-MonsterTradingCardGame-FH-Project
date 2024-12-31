@@ -25,6 +25,14 @@ namespace SemesterProjekt1
             this.Cards = Cards;
         }
 
+        public CardPack(List<Card> Cards, int userID)
+        {
+            this.UserID = userID;
+            this.Rarity = 0;
+            this.Price = 5;
+            this.Cards = Cards;
+        }
+
         [JsonConstructor]
         public CardPack(int userID, Rarity rarity)
         {

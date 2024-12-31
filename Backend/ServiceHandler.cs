@@ -17,6 +17,7 @@ namespace SemesterProjekt1
             _users = _databaseHandler.LoadUsers();
             _lobby = new List<User>();
             _tradingDeals = new List<TradingLogic>();
+            _admingeneratedcardpacks = new List<CardPack>();
 
             if (_users.Count == 0)
             {
@@ -167,7 +168,21 @@ namespace SemesterProjekt1
             {
                 try
                 {
-                    user.Inventory.AddCardPack(new CardPack(userId), amount);
+                    if (_admingeneratedcardpacks != null && _admingeneratedcardpacks.Count > 0)
+                    {
+                        int packsToTake = Math.Min(amount, _admingeneratedcardpacks.Count);
+                        for (int i = 0; i < packsToTake; i++)
+                        {
+                            user.Inventory.AddCardPack(_admingeneratedcardpacks[i], 1);
+                        }
+                        amount -= packsToTake;
+                        _admingeneratedcardpacks.RemoveRange(0, packsToTake);
+                    }
+                    else if (amount > 0)
+                    {
+                        user.Inventory.AddCardPack(amount);
+                    }
+
                     _databaseHandler.UpdateUser(user);
                     _users[_users.FindIndex(u => u.Id == user.Id)] = user;
                 }
@@ -313,6 +328,12 @@ namespace SemesterProjekt1
                     }
                 }
             }
+        }
+
+        public void CreatePack(List<Card> cards)
+        {
+            this._admingeneratedcardpacks.Add(new CardPack(cards));
+            Console.WriteLine(_admingeneratedcardpacks.Count);
         }
     }
 }
