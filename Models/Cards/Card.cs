@@ -1,5 +1,4 @@
-﻿using System.Reflection.Metadata.Ecma335;
-using System.Text.Json;
+﻿using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace SemesterProjekt1
@@ -177,10 +176,6 @@ namespace SemesterProjekt1
 
     public class CardData
     {
-        public Guid Id { get; set; }
-        public string Name { get; set; }
-        public double Damage { get; set; }
-
         public class CardConverter : JsonConverter<Card>
         {
             public override Card Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
@@ -211,9 +206,8 @@ namespace SemesterProjekt1
             }
         }
 
-
-
-
-
+        public Guid Id { get; set; }
+        public string Name { get; set; }
+        public double Damage { get; set; }
     }
 }

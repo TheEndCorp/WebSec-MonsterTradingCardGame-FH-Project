@@ -55,7 +55,8 @@ namespace SemesterProjekt1
                         }
                         else
                         {
-                            var allCards = _userServiceHandler.GetAllCards();
+                            //  var allCards = _userServiceHandler.GetAllCards();
+                            var allCards = user.Inventory.OwnedCards;
                             string jsonResponse = SerializeToJson(allCards);
                             SendResponse(response, jsonResponse, "application/json");
                         }
@@ -447,7 +448,7 @@ namespace SemesterProjekt1
                     return;
                 }
 
-                _userServiceHandler.BuyPacks(user.Id, amount, user.Username, user.Password); 
+                _userServiceHandler.BuyPacks(user.Id, amount, user.Username, user.Password);
                 _userServiceHandler.UpdateUser(user.Id, user);
                 string jsonResponse = SerializeToJson(new { message = "Packs bought successfully" });
 
@@ -960,7 +961,10 @@ namespace SemesterProjekt1
                     var cardDataList = JsonSerializer.Deserialize<List<CardData>>(requestBody);
                     if (cardDataList != null)
                     {
-                        var cards = cardDataList.Select(data => CardCreator9000.CreateCard(data)).ToList();
+                        var cards = cardDataList.Select(data =>
+                        {
+                            return CardCreator9000.CreateCard(data);
+                        }).ToList();
                         _userServiceHandler.CreatePack(cards);
                         SendResponse(response, "Packages added successfully", "application/json", HttpStatusCode.Created);
                     }
