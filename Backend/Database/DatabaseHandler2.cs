@@ -217,6 +217,7 @@ namespace SemesterProjekt1
                             {
                                 inventory.Money = reader.GetInt32(0);
                                 inventory.ELO = reader.GetInt32(1);
+                                inventory.UserID = userId;
                             }
                         }
                     }
@@ -306,6 +307,7 @@ namespace SemesterProjekt1
                             {
                                 inventory.Money = reader.GetInt32(0);
                                 inventory.ELO = reader.GetInt32(1);
+                                inventory.UserID = userId;
                             }
                         }
                     }

@@ -447,7 +447,7 @@ namespace SemesterProjekt1
                     return;
                 }
 
-                user.Inventory.AddCardPack(new CardPack(user.Id), amount);
+                _userServiceHandler.BuyPacks(user.Id, amount, user.Username, user.Password); 
                 _userServiceHandler.UpdateUser(user.Id, user);
                 string jsonResponse = SerializeToJson(new { message = "Packs bought successfully" });
 

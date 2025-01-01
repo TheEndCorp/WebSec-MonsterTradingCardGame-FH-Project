@@ -57,5 +57,10 @@ namespace SemesterProjekt1
             this._password = password;
             this._Inventory = inventory ?? new Inventory(this._id);
         }
+
+        public void GetNextAvailableId(List<User> userlist)
+        {
+            this.Id = userlist.Any() ? userlist.Max(u => u.Id) + 1 : 1;
+        }
     }
 }

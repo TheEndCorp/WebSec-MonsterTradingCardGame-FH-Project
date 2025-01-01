@@ -99,7 +99,7 @@ namespace SemesterProjekt1
             {
                 throw new InvalidOperationException("Pffff Buffer Overload Detected.");
             }
-
+            user.GetNextAvailableId(_users);
             _users.Add(user);
             _databaseHandler.SaveUsers(_users);
         }
@@ -177,6 +177,7 @@ namespace SemesterProjekt1
                         }
                         amount -= packsToTake;
                         _admingeneratedcardpacks.RemoveRange(0, packsToTake);
+                        OpenCardPack(userId, username, password);
                     }
                     else if (amount > 0)
                     {

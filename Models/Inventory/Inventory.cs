@@ -47,6 +47,10 @@ namespace SemesterProjekt1
 
         public void AddCardPack(CardPack cardPack)
         {
+            foreach (var card in cardPack.Cards)
+            {
+                card.UserID = this.UserID;
+            }
             CardPacks.Add(cardPack);
         }
 
@@ -57,7 +61,13 @@ namespace SemesterProjekt1
 
             while (amount > 0 && this.Money >= 5 * amount)
             {
+                foreach (var card in cardPack.Cards)
+                {
+                    card.UserID = this.UserID;
+                }
+
                 CardPacks.Add(cardPack);
+
                 Console.WriteLine(this.Money);
                 this.Money -= 5;
                 Console.WriteLine(this.Money);

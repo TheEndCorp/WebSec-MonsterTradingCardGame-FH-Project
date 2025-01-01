@@ -47,7 +47,7 @@
                     <button onclick='window.location.href=""/users"";'>Show All Users</button>
                     <button onclick='window.location.href=""/login"";'>Login</button>";
 
-            for (int i = 0; i <= size - 1; i++)
+            for (int i = 1; i <= size; i++)
             {
                 htmlResponse += $@"<button onclick='window.location.href=""/user/{i}"";'>Show User with ID {i}</button>";
             }
