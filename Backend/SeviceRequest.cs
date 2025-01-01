@@ -114,7 +114,21 @@ namespace SemesterProjekt1
                         }
                         break;
                     }
-
+                case "/deck":
+                    {
+                        var user = await IsIdentiyYesUserCookie(request, response);
+                        if (user == null)
+                        {
+                            SendErrorResponse(response, HttpStatusCode.Unauthorized);
+                        }
+                        else
+                        {
+                            var deck = user.Inventory.Deck.Cards;
+                            string jsonResponse = SerializeToJson(deck);
+                            SendResponse(response, jsonResponse, "application/json");
+                        }
+                        break;
+                    }
                 default:
                     {
                         response.WriteLine("HTTP/1.1 404 Not Found");
@@ -180,6 +194,63 @@ namespace SemesterProjekt1
                     response.WriteLine();
                     response.Flush();
                     break;
+            }
+        }
+
+        private async Task HandlePutRequestAsync(StreamReader request, StreamWriter response, string path1)
+        {
+            switch (path1)
+            {
+                case "/deck":
+                    await HandleConfigureDeckAsync(request, response);
+
+                    break;
+
+                default:
+                    response.WriteLine("HTTP/1.1 404 Not Found");
+                    response.WriteLine("Content-Length: 0");
+                    response.WriteLine();
+                    response.Flush();
+                    break;
+            }
+        }
+
+        private async Task HandleConfigureDeckAsync(StreamReader reader, StreamWriter writer)
+        {
+            var user = await IsIdentiyYesUserCookie(reader, writer);
+            if (user != null)
+            {
+                string requestBody = await ReadRequestBodyAsync(reader, writer);
+                try
+                {
+                    var cardIds = JsonSerializer.Deserialize<List<Guid>>(requestBody);
+                    if (cardIds != null)
+                    {
+                        var cards = user.Inventory.OwnedCards.Where(card => cardIds.Contains(card.ID)).ToList();
+                        if (cards.Count == cardIds.Count)
+                        {
+                            user.Inventory.Deck.Cards = cards;
+                            _userServiceHandler.UpdateUserInventory(user);
+                            SendResponse(writer, "Deck configured successfully", "application/text", HttpStatusCode.OK);
+                        }
+                        else
+                        {
+                            SendErrorResponse(writer, HttpStatusCode.BadRequest, "Some cards not found in user's inventory");
+                        }
+                    }
+                    else
+                    {
+                        SendErrorResponse(writer, HttpStatusCode.BadRequest, "Invalid card IDs");
+                    }
+                }
+                catch (JsonException ex)
+                {
+                    SendErrorResponse(writer, HttpStatusCode.BadRequest, $"Invalid JSON format: {ex.Message}");
+                }
+            }
+            else
+            {
+                SendErrorResponse(writer, HttpStatusCode.Unauthorized, "Invalid user");
             }
         }
 
@@ -1002,6 +1073,10 @@ namespace SemesterProjekt1
 
                     case "POST":
                         await HandlePostRequestAsync(request, response, path);
+                        break;
+
+                    case "PUT":
+                        await HandlePutRequestAsync(request, response, path);
                         break;
 
                     default:
