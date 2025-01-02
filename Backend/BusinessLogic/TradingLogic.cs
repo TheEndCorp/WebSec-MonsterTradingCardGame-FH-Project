@@ -76,10 +76,9 @@ namespace SemesterProjekt1
                                 minimumDamage = reader.GetInt32();
                                 break;
 
-                            /*  case "UserId":
-                                  userId = reader.GetInt32();
-                                  break;
-                            */
+                            case "UserId":
+                                userId = reader.GetInt32();
+                                break;
 
                             default:
                                 throw new JsonException($"Unexpected property: {propertyName}");

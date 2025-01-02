@@ -269,11 +269,25 @@ namespace SemesterProjekt1
             var cardToTrade = user.Inventory.OwnedCards.FirstOrDefault(c => c.ID == deal.CardToTrade);
             if (cardToTrade != null)
             {
+                if (cardToTrade.InTrade)
+                {
+                    throw new InvalidOperationException("Card is already in trade.");
+                }
+
                 _tradingDeals.Add(deal);
                 user.Inventory.OwnedCards.First(c => c.ID == cardToTrade.ID).InTrade = true;
 
                 user.Inventory.Deck.Cards.Remove(cardToTrade);
                 user.Inventory.OwnedCards.First(c => c.ID == cardToTrade.ID).InDeck = false;
+
+                if (user.Inventory.Deck.Cards.Count < 4)
+                {
+                    foreach (var card in user.Inventory.Deck.Cards)
+                    {
+                        card.InDeck = false;
+                    }
+                    user.Inventory.Deck.Cards.Clear();
+                }
 
                 _databaseHandler.UpdateUser(user);
                 _databaseHandler.SaveTrade(_tradingDeals);
@@ -290,6 +304,9 @@ namespace SemesterProjekt1
             if (deal != null)
             {
                 _tradingDeals.Remove(deal);
+                _users.First(u => u.Id == deal.UserId).Inventory.OwnedCards.First(c => c.ID == deal.CardToTrade).InTrade = false;
+                _databaseHandler.SaveTrade(_tradingDeals);
+                _databaseHandler.UpdateUser(_users.First(u => u.Id == deal.UserId));
             }
         }
 

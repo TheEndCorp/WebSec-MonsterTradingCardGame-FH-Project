@@ -88,6 +88,7 @@ namespace SemesterProjekt1
             this._username = username;
             this._password = password;
             this._Inventory = inventory ?? new Inventory(this._id);
+            this._Inventory.UserID = this._id;
             this._image = image ?? string.Empty;
             this._bio = bio ?? string.Empty;
             this._name = name ?? string.Empty;
@@ -97,6 +98,7 @@ namespace SemesterProjekt1
         public void GetNextAvailableId(List<User> userlist)
         {
             this.Id = userlist.Any() ? userlist.Max(u => u.Id) + 1 : 1;
+            this._Inventory.UserID = this.Id;
         }
     }
 }

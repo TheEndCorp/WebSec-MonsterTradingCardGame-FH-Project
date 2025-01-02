@@ -1182,6 +1182,10 @@ namespace SemesterProjekt1
                         await HandlePutRequestAsync(request, response, path);
                         break;
 
+                    case "DELETE":
+                        await HandleDeleteRequestAsync(request, response, path);
+                        break;
+
                     default:
                         response.WriteLine("HTTP/1.1 405 Method Not Allowed");
                         response.WriteLine("Content-Length: 0");

@@ -93,7 +93,7 @@ namespace SemesterProjekt1
         public void OpenCardPack(CardPack cardPack)
         {
             JustOpened = new List<Card>();
-            var newCards = cardPack.OpenCardPack(UserID);
+            var newCards = cardPack.OpenCardPack(this.UserID);
             foreach (var card in newCards)
             {
                 AddCardToOwnedCards(card);
