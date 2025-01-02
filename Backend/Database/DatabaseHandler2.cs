@@ -84,7 +84,10 @@ namespace SemesterProjekt1
                         Username TEXT NOT NULL,
                         Password TEXT NOT NULL,
                         Money INTEGER,
-                        ELO INTEGER
+                        ELO INTEGER,
+                        Bio TEXT,
+                        Image TEXT,
+                        Name TEXT
                     );";
             using (var command = new NpgsqlCommand(createUsersTable, connection))
             {
@@ -146,8 +149,12 @@ namespace SemesterProjekt1
                         Username TEXT NOT NULL,
                         Password TEXT NOT NULL,
                         Money INTEGER,
-                        ELO INTEGER
-                    );";
+                        ELO INTEGER,
+                        Bio TEXT,
+                        Image TEXT,
+                        Name TEXT
+);";
+
             using (var command = new SqliteCommand(createUsersTable, connection))
             {
                 command.ExecuteNonQuery();
@@ -572,9 +579,11 @@ namespace SemesterProjekt1
                             int id = reader.GetInt32(0);
                             string username = reader.GetString(1);
                             string password = reader.GetString(2);
-
+                            string bio = reader.GetString(3);
+                            string image = reader.GetString(4);
+                            string name = reader.GetString(5);
                             var inventory = LoadInventory(id);
-                            users.Add(new User(id, username, password, inventory));
+                            users.Add(new User(id, username, password, inventory, bio, image, name));
                         }
                     }
                 }
@@ -593,9 +602,11 @@ namespace SemesterProjekt1
                             int id = reader.GetInt32(0);
                             string username = reader.GetString(1);
                             string password = reader.GetString(2);
-
+                            string bio = reader.GetString(3);
+                            string image = reader.GetString(4);
+                            string name = reader.GetString(5);
                             var inventory = LoadInventory(id);
-                            users.Add(new User(id, username, password, inventory));
+                            users.Add(new User(id, username, password, inventory, bio, image, name));
                         }
                     }
                 }
@@ -615,13 +626,16 @@ namespace SemesterProjekt1
                         foreach (var user in users)
                         {
                             string insertOrUpdateUser = @"
-                                    INSERT INTO Users (Id, Username, Password, Money, Elo)
-                                    VALUES (@Id, @Username, @Password, @Money, @Elo)
+                                    INSERT INTO Users (Id, Username, Password, Money, Elo, Bio, Image, Name)
+                                    VALUES (@Id, @Username, @Password, @Money, @Elo, @Bio, @Image, @Name)
                                     ON CONFLICT (Id) DO UPDATE
                                     SET Username = EXCLUDED.Username,
                                         Password = EXCLUDED.Password,
                                         Money = EXCLUDED.Money,
-                                        Elo = EXCLUDED.Elo;";
+                                        Elo = EXCLUDED.Elo,
+                                        Bio = EXCLUDED.Bio,
+                                        Image = EXCLUDED.Image,
+                                        Name = EXCLUDED.Name;";
                             using (var command = new NpgsqlCommand(insertOrUpdateUser, connection, transaction))
                             {
                                 command.Parameters.AddWithValue("@Id", user.Id);
@@ -629,6 +643,8 @@ namespace SemesterProjekt1
                                 command.Parameters.AddWithValue("@Password", user.Password);
                                 command.Parameters.AddWithValue("@Money", user.Inventory.Money);
                                 command.Parameters.AddWithValue("@Elo", user.Inventory.ELO);
+                                command.Parameters.AddWithValue("@Bio", user.Bio);
+                                command.Parameters.AddWithValue("@Image", user.Image);
                                 command.ExecuteNonQuery();
                             }
 
@@ -648,8 +664,8 @@ namespace SemesterProjekt1
                         foreach (var user in users)
                         {
                             string insertOrUpdateUser = @"
-                                    INSERT OR REPLACE INTO Users (Id, Username, Password, Money, Elo)
-                                    VALUES (@Id, @Username, @Password, @Money, @Elo);";
+                                    INSERT OR REPLACE INTO Users (Id, Username, Password, Money, Elo, Bio, Image)
+                                    VALUES (@Id, @Username, @Password, @Money, @Elo, @Bio, @Image);";
                             using (var command = new SqliteCommand(insertOrUpdateUser, connection, transaction))
                             {
                                 command.Parameters.AddWithValue("@Id", user.Id);
@@ -657,6 +673,9 @@ namespace SemesterProjekt1
                                 command.Parameters.AddWithValue("@Password", user.Password);
                                 command.Parameters.AddWithValue("@Money", user.Inventory.Money);
                                 command.Parameters.AddWithValue("@Elo", user.Inventory.ELO);
+                                command.Parameters.AddWithValue("@Bio", user.Bio ?? string.Empty);
+                                command.Parameters.AddWithValue("@Image", user.Image ?? string.Empty);
+                                command.Parameters.AddWithValue("@Name", user.Name ?? string.Empty);
                                 command.ExecuteNonQuery();
                             }
 
@@ -678,13 +697,16 @@ namespace SemesterProjekt1
                     using (var transaction = connection.BeginTransaction())
                     {
                         string insertOrUpdateUser = @"
-                                INSERT INTO Users (Id, Username, Password, Money, Elo)
-                                VALUES (@Id, @Username, @Password, @Money, @Elo)
+                                INSERT INTO Users (Id, Username, Password, Money, Elo, Bio, Image, Name)
+                                VALUES (@Id, @Username, @Password, @Money, @Elo, @Bio, @Image, @Name)
                                 ON CONFLICT (Id) DO UPDATE
                                 SET Username = EXCLUDED.Username,
                                     Password = EXCLUDED.Password,
                                     Money = EXCLUDED.Money,
-                                    Elo = EXCLUDED.Elo;";
+                                    Elo = EXCLUDED.Elo,
+                                    Bio = EXCLUDED.Bio,
+                                    Image = EXCLUDED.Image,
+                                    Name = EXCLUDED.Name;";
                         using (var command = new NpgsqlCommand(insertOrUpdateUser, connection, transaction))
                         {
                             command.Parameters.AddWithValue("@Id", user.Id);
@@ -692,6 +714,9 @@ namespace SemesterProjekt1
                             command.Parameters.AddWithValue("@Password", user.Password);
                             command.Parameters.AddWithValue("@Money", user.Inventory.Money);
                             command.Parameters.AddWithValue("@Elo", user.Inventory.ELO);
+                            command.Parameters.AddWithValue("@Bio", user.Bio ?? string.Empty);
+                            command.Parameters.AddWithValue("@Image", user.Image ?? string.Empty);
+                            command.Parameters.AddWithValue("@Name", user.Name ?? string.Empty);
                             command.ExecuteNonQuery();
                         }
 
@@ -708,8 +733,8 @@ namespace SemesterProjekt1
                     using (var transaction = connection.BeginTransaction())
                     {
                         string insertOrUpdateUser = @"
-                                INSERT OR REPLACE INTO Users (Id, Username, Password, Money, Elo)
-                                VALUES (@Id, @Username, @Password, @Money, @Elo);";
+                                INSERT OR REPLACE INTO Users (Id, Username, Password, Money, Elo, Bio, Image, Name)
+                                VALUES (@Id, @Username, @Password, @Money, @Elo, @Bio, @Image, @Name);";
                         using (var command = new SqliteCommand(insertOrUpdateUser, connection, transaction))
                         {
                             command.Parameters.AddWithValue("@Id", user.Id);
@@ -717,6 +742,9 @@ namespace SemesterProjekt1
                             command.Parameters.AddWithValue("@Password", user.Password);
                             command.Parameters.AddWithValue("@Money", user.Inventory.Money);
                             command.Parameters.AddWithValue("@Elo", user.Inventory.ELO);
+                            command.Parameters.AddWithValue("@Bio", user.Bio);
+                            command.Parameters.AddWithValue("@Image", user.Image);
+                            command.Parameters.AddWithValue("@Name", user.Name ?? string.Empty);
                             command.ExecuteNonQuery();
                         }
 
@@ -745,8 +773,11 @@ namespace SemesterProjekt1
                             {
                                 string username = reader.GetString(1);
                                 string password = reader.GetString(2);
+                                string bio = reader.GetString(5);
+                                string image = reader.GetString(6);
+                                string Name = reader.GetString(7);
                                 var inventory = LoadInventory(userId);
-                                user = new User(userId, username, password, inventory);
+                                user = new User(userId, username, password, inventory, bio, image, Name);
                             }
                         }
                     }
@@ -767,8 +798,11 @@ namespace SemesterProjekt1
                             {
                                 string username = reader.GetString(1);
                                 string password = reader.GetString(2);
+                                string bio = reader.GetString(5);
+                                string image = reader.GetString(6);
+                                string Name = reader.GetString(7);
                                 var inventory = LoadInventory(userId);
-                                user = new User(userId, username, password, inventory);
+                                user = new User(userId, username, password, inventory, bio, image, Name);
                             }
                         }
                     }

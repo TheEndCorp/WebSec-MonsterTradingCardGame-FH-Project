@@ -30,7 +30,7 @@ namespace SemesterProjekt1
 
         private async Task HandleGetRequestAsync(StreamReader request, StreamWriter response, string path1)
         {
-            switch (path1)
+            switch (path1.Split('?')[0])
             {
                 case "/":
                     {
@@ -55,16 +55,20 @@ namespace SemesterProjekt1
                         }
                         else
                         {
-                            //  var allCards = _userServiceHandler.GetAllCards();
                             var allCards = user.Inventory.OwnedCards;
                             string jsonResponse = SerializeToJson(allCards);
                             SendResponse(response, jsonResponse, "application/json");
                         }
                         break;
                     }
-                case string path when path1.StartsWith("/user/"):
+                case string path when path.StartsWith("/user/"):
                     {
-                        await HandleGetUserByIdAsync(request, response, path1);
+                        await HandleGetUserByIdAsync(request, response, path);
+                        break;
+                    }
+                case string path when path.StartsWith("/users/"):
+                    {
+                        await HandleGetUserByUsernameAsync(request, response, path);
                         break;
                     }
                 case "/login":
@@ -123,9 +127,19 @@ namespace SemesterProjekt1
                         }
                         else
                         {
-                            var deck = user.Inventory.Deck.Cards;
-                            string jsonResponse = SerializeToJson(deck);
-                            SendResponse(response, jsonResponse, "application/json");
+                            string query = path1.Contains("?") ? path1.Split('?')[1] : string.Empty;
+                            if (query.Contains("format=plain"))
+                            {
+                                var deck = user.Inventory.Deck.Cards;
+                                string plainResponse = string.Join("\n", deck.Select(card => card.ToString()));
+                                SendResponse(response, plainResponse, "text/plain");
+                            }
+                            else
+                            {
+                                var deck = user.Inventory.Deck.Cards;
+                                string jsonResponse = SerializeToJson(deck);
+                                SendResponse(response, jsonResponse, "application/json");
+                            }
                         }
                         break;
                     }
@@ -203,7 +217,10 @@ namespace SemesterProjekt1
             {
                 case "/deck":
                     await HandleConfigureDeckAsync(request, response);
+                    break;
 
+                case string path when path.StartsWith("/users/"):
+                    await HandleUpdateUserAsync(request, response, path);
                     break;
 
                 default:
@@ -226,16 +243,28 @@ namespace SemesterProjekt1
                     var cardIds = JsonSerializer.Deserialize<List<Guid>>(requestBody);
                     if (cardIds != null)
                     {
-                        var cards = user.Inventory.OwnedCards.Where(card => cardIds.Contains(card.ID)).ToList();
-                        if (cards.Count == cardIds.Count)
+                        if (cardIds.Count < 4)
                         {
+                            SendErrorResponse(writer, HttpStatusCode.BadRequest, "A deck must contain at least 4 cards.");
+                        }
+
+                        var cards = user.Inventory.OwnedCards
+                            .Where(card => cardIds.Contains(card.ID) && !card.InTrade)
+                            .ToList();
+                        if (cards.Count == cardIds.Count && cards.Count >= 4)
+                        {
+                            foreach (var card in cards)
+                            {
+                                card.InDeck = true;
+                            }
+
                             user.Inventory.Deck.Cards = cards;
                             _userServiceHandler.UpdateUserInventory(user);
                             SendResponse(writer, "Deck configured successfully", "application/text", HttpStatusCode.OK);
                         }
                         else
                         {
-                            SendErrorResponse(writer, HttpStatusCode.BadRequest, "Some cards not found in user's inventory");
+                            SendErrorResponse(writer, HttpStatusCode.BadRequest, "Some cards not found in user's inventory or are in trade");
                         }
                     }
                     else
@@ -1058,6 +1087,80 @@ namespace SemesterProjekt1
             else
             {
                 SendErrorResponse(response, HttpStatusCode.Unauthorized, "Unauthorized user");
+            }
+        }
+
+        private async Task HandleGetUserByUsernameAsync(StreamReader request, StreamWriter response, string path)
+        {
+            string username = path.Substring(7);
+
+            var user = await IsIdentiyYesUserCookie(request, response);
+
+            if (user.Username == username)
+            {
+                if (user != null)
+                {
+                    string jsonResponse = SerializeToJson(user);
+                    SendResponse(response, jsonResponse, "application/json");
+                }
+                else
+                {
+                    SendErrorResponse(response, HttpStatusCode.BadRequest, "User not found");
+                }
+            }
+            else
+            {
+                SendErrorResponse(response, HttpStatusCode.Unauthorized, "Unauthorized");
+            }
+        }
+
+        private async Task HandleUpdateUserAsync(StreamReader request, StreamWriter response, string path)
+        {
+            var user = await IsIdentiyYesUserCookie(request, response);
+            if (user != null)
+            {
+                string username = path.Substring(7);
+                if (user.Username == username)
+                {
+                    string requestBody = await ReadRequestBodyAsync(request, response);
+                    try
+                    {
+                        using (JsonDocument doc = JsonDocument.Parse(requestBody))
+                        {
+                            JsonElement root = doc.RootElement;
+
+                            if (root.TryGetProperty("Name", out JsonElement nameElement))
+                            {
+                                user.Name = nameElement.GetString();
+                            }
+
+                            if (root.TryGetProperty("Bio", out JsonElement bioElement))
+                            {
+                                user.Bio = bioElement.GetString();
+                            }
+
+                            if (root.TryGetProperty("Image", out JsonElement imageElement))
+                            {
+                                user.Image = imageElement.GetString();
+                            }
+                        }
+
+                        _userServiceHandler.UpdateUser(user.Id, user);
+                        SendResponse(response, "User updated successfully", "application/json", HttpStatusCode.OK);
+                    }
+                    catch (JsonException ex)
+                    {
+                        SendErrorResponse(response, HttpStatusCode.BadRequest, $"Invalid JSON format: {ex.Message}");
+                    }
+                }
+                else
+                {
+                    SendErrorResponse(response, HttpStatusCode.Unauthorized, "Unauthorized");
+                }
+            }
+            else
+            {
+                SendErrorResponse(response, HttpStatusCode.Unauthorized, "Invalid user");
             }
         }
 
