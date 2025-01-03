@@ -150,12 +150,17 @@ namespace SemesterProjekt1
             StringBuilder battleLog = new StringBuilder();
             Dictionary<string, string> result = new Dictionary<string, string>();
 
-            while (round < 100 && player1Deck.Count > 0 && player2Deck.Count > 0)
-            {
-                Card player1Card = player1Deck[random.Next(player1Deck.Count)];
-                Card player2Card = player2Deck[random.Next(player2Deck.Count)];
+            List<Card> player1DeckCopy = new List<Card>(player1Deck);
+            List<Card> player2DeckCopy = new List<Card>(player2Deck);
 
-                battleLog.AppendLine($"Runde {round + 1}: {player1Card.Name} vs {player2Card.Name}");
+            Random random = new Random(DateTime.Now.Millisecond);
+
+            while (round < 100 && player1DeckCopy.Count > 0 && player2DeckCopy.Count > 0)
+            {
+                Card player1Card = player1DeckCopy[random.Next(player1DeckCopy.Count)];
+                Card player2Card = player2DeckCopy[random.Next(player2DeckCopy.Count)];
+
+                battleLog.AppendLine($"Runde {round + 1}: {player1Card.Name} vs {player2Card.Name} ");
 
                 int player1Damage = CalculateDamage(player1Card, player2Card);
                 int player2Damage = CalculateDamage(player2Card, player1Card);
@@ -163,14 +168,14 @@ namespace SemesterProjekt1
                 if (player1Damage > player2Damage)
                 {
                     battleLog.AppendLine($"{player1Card.Name} gewinnt die Runde!");
-                    player1Deck.Add(player2Card);
-                    player2Deck.Remove(player2Card);
+                    player1DeckCopy.Add(player2Card);
+                    player2DeckCopy.Remove(player2Card);
                 }
                 else if (player2Damage > player1Damage)
                 {
                     battleLog.AppendLine($"{player2Card.Name} gewinnt die Runde!");
-                    player2Deck.Add(player1Card);
-                    player1Deck.Remove(player1Card);
+                    player2DeckCopy.Add(player1Card);
+                    player1DeckCopy.Remove(player1Card);
                 }
                 else
                 {
@@ -182,12 +187,12 @@ namespace SemesterProjekt1
 
             battleLog.AppendLine("Kampf beendet!");
 
-            if (player1Deck.Count > player2Deck.Count)
+            if (player1DeckCopy.Count > player2DeckCopy.Count)
             {
                 battleLog.AppendLine($"Spieler 1 ({User1.Username}) gewinnt den Kampf!");
                 result["winner"] = User1.Username;
             }
-            else if (player2Deck.Count > player1Deck.Count)
+            else if (player2DeckCopy.Count > player1DeckCopy.Count)
             {
                 battleLog.AppendLine($"Spieler 2 ({User2.Username}) gewinnt den Kampf!");
                 result["winner"] = User2.Username;

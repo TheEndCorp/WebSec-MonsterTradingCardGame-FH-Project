@@ -28,6 +28,16 @@ namespace SemesterProjekt1
             _htmlgen = new HTMLGEN(_userServiceHandler);
         }
 
+        private void SendErrorResponse(StreamWriter writer, HttpStatusCode statusCode, string message)
+        {
+            writer.WriteLine($"HTTP/1.1 {(int)statusCode} {statusCode}");
+            writer.WriteLine("Content-Type: text/plain");
+            writer.WriteLine("Content-Length: " + message.Length);
+            writer.WriteLine();
+            writer.Write(message);
+            writer.Flush();
+        }
+
         private async Task HandleGetRequestAsync(StreamReader request, StreamWriter response, string path1)
         {
             switch (path1.Split('?')[0])
@@ -232,6 +242,23 @@ namespace SemesterProjekt1
             }
         }
 
+        private async Task HandleDeleteRequestAsync(StreamReader request, StreamWriter response, string path1)
+        {
+            switch (path1)
+            {
+                case string path when path1.StartsWith("/tradings/"):
+                    await HandleDeleteTradingDealAsync(request, response, path1);
+                    break;
+
+                default:
+                    response.WriteLine("HTTP/1.1 404 Not Found");
+                    response.WriteLine("Content-Length: 0");
+                    response.WriteLine();
+                    response.Flush();
+                    break;
+            }
+        }
+
         private async Task HandleConfigureDeckAsync(StreamReader reader, StreamWriter writer)
         {
             var user = await IsIdentiyYesUserCookie(reader, writer);
@@ -330,7 +357,7 @@ namespace SemesterProjekt1
             {
                 SendErrorResponse(response, HttpStatusCode.BadRequest);
             }
-            await Task.CompletedTask; // Add this line to avoid CS1998 warning
+            await Task.CompletedTask;
         }
 
         private async Task HandleAddUserAsync(StreamReader request, StreamWriter response)
@@ -369,7 +396,7 @@ namespace SemesterProjekt1
                 if (inventory != null)
                 {
                     string inventoryHtml = _htmlgen.GenerateInventoryHtml(inventory);
-                    responseContent += "\n" + inventoryHtml; // Combine token and inventory HTML in one response
+                    responseContent += "\n" + inventoryHtml;
                 }
 
                 response.WriteLine("HTTP/1.1 200 OK");
@@ -385,16 +412,6 @@ namespace SemesterProjekt1
             {
                 SendErrorResponse(response, HttpStatusCode.Unauthorized, "Invalid username or password");
             }
-        }
-
-        private void SendErrorResponse(StreamWriter writer, HttpStatusCode statusCode, string message)
-        {
-            writer.WriteLine($"HTTP/1.1 {(int)statusCode} {statusCode}");
-            writer.WriteLine("Content-Type: text/plain");
-            writer.WriteLine("Content-Length: " + message.Length);
-            writer.WriteLine();
-            writer.Write(message);
-            writer.Flush();
         }
 
         private async Task HandleLoginAsyncCURL(StreamReader reader, StreamWriter writer)
@@ -437,7 +454,6 @@ namespace SemesterProjekt1
         {
             try
             {
-                // Set expired cookie headers to clear them
                 writer.WriteLine("HTTP/1.1 200 OK");
                 writer.WriteLine("Set-Cookie: userData=; Expires=Thu, 01 Jan 1970 00:00:00 GMT");
                 writer.WriteLine("Content-Type: text/plain");
@@ -637,7 +653,6 @@ namespace SemesterProjekt1
 
         private bool IsValidInput(string input)
         {
-            // Überprüfen Sie auf schädliche Zeichen oder Muster
             string[] blackList = { "'", "\"", "--", ";", "/*", "*/", "xp_" };
             foreach (var item in blackList)
             {
@@ -647,8 +662,7 @@ namespace SemesterProjekt1
                 }
             }
 
-            // Überprüfen Sie die Länge der Eingabe
-            if (input.Length > 20) // Beispielgrenze, anpassen nach Bedarf
+            if (input.Length > 20)
             {
                 return false;
             }
@@ -868,10 +882,9 @@ namespace SemesterProjekt1
                     foreach (var cookie in cookies)
                     {
                         var trimmedCookie = cookie.Trim();
-                        // Check if the cookie starts with "userData=" to capture everything after it
+
                         if (trimmedCookie.StartsWith("userData="))
                         {
-                            // Capture everything after "userData="
                             userDataCookie = trimmedCookie.Substring("userData=".Length);
                             break;
                         }
@@ -903,7 +916,7 @@ namespace SemesterProjekt1
 
             Console.WriteLine($"userData cookie: {userDataCookie}");
 
-            // Reset the reader to the beginning of the stream
+            // Reset the reader to start of stream workarround to get it back
             reader.BaseStream.Seek(0, SeekOrigin.Begin);
             reader.DiscardBufferedData();
             Console.ResetColor();
@@ -1000,23 +1013,6 @@ namespace SemesterProjekt1
             else
             {
                 SendErrorResponse(response, HttpStatusCode.Unauthorized, "Invalid user");
-            }
-        }
-
-        private async Task HandleDeleteRequestAsync(StreamReader request, StreamWriter response, string path1)
-        {
-            switch (path1)
-            {
-                case string path when path1.StartsWith("/tradings/"):
-                    await HandleDeleteTradingDealAsync(request, response, path1);
-                    break;
-
-                default:
-                    response.WriteLine("HTTP/1.1 404 Not Found");
-                    response.WriteLine("Content-Length: 0");
-                    response.WriteLine();
-                    response.Flush();
-                    break;
             }
         }
 

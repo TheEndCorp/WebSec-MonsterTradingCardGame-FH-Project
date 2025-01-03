@@ -55,7 +55,6 @@ namespace SemesterProjekt1
             {
                 using (var networkStream = client.GetStream())
                 {
-                    // Check if the stream is usable
                     if (networkStream.CanRead && networkStream.CanWrite)
                     {
                         using (MemoryStream memoryStream = new MemoryStream())
@@ -63,10 +62,8 @@ namespace SemesterProjekt1
                             byte[] buffer = new byte[4096];
                             int bytesRead;
 
-                            // Read from the network stream into the memory stream
                             bytesRead = await networkStream.ReadAsync(buffer, 0, buffer.Length);
 
-                            // Only process if we have data
                             if (bytesRead > 0)
                             {
                                 await memoryStream.WriteAsync(buffer, 0, bytesRead);
@@ -154,7 +151,6 @@ namespace SemesterProjekt1
 
         private static bool IsValidPath(string path)
         {
-            // Add more validation rules as needed
             return !string.IsNullOrEmpty(path) && path.Length <= 2048 && !path.Contains("..");
         }
 
@@ -306,7 +302,7 @@ namespace SemesterProjekt1
             string response = $"HTTP/1.1 404 Not found\r\nContent-Length: 0\r\n\r\n";
             byte[] responseBytes = Encoding.UTF8.GetBytes(response);
             stream.Write(responseBytes, 0, responseBytes.Length);
-            stream.Flush();  // Ensure data is sent immediately.
+            stream.Flush();
         }
     }
 }

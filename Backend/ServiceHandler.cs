@@ -16,7 +16,7 @@ namespace SemesterProjekt1
             _databaseHandler = new DatabaseHandler2();
             _users = _databaseHandler.LoadUsers();
             _lobby = new List<User>();
-            _tradingDeals = new List<TradingLogic>();
+            _tradingDeals = _databaseHandler.LoadTrades();
             _admingeneratedcardpacks = new List<CardPack>();
 
             if (_users.Count == 0)
@@ -47,7 +47,6 @@ namespace SemesterProjekt1
 
         private bool IsValidInput(string input)
         {
-            // Überprüfen Sie auf schädliche Zeichen oder Muster
             string[] blackList = { "'", "\"", "--", ";", "/*", "*/", "xp_" };
             foreach (var item in blackList)
             {
@@ -57,8 +56,7 @@ namespace SemesterProjekt1
                 }
             }
 
-            // Überprüfen Sie die Länge der Eingabe
-            if (input.Length > 50) // Beispielgrenze, anpassen nach Bedarf
+            if (input.Length > 50)
             {
                 return false;
             }
@@ -304,9 +302,21 @@ namespace SemesterProjekt1
             if (deal != null)
             {
                 _tradingDeals.Remove(deal);
-                _users.First(u => u.Id == deal.UserId).Inventory.OwnedCards.First(c => c.ID == deal.CardToTrade).InTrade = false;
-                _databaseHandler.SaveTrade(_tradingDeals);
-                _databaseHandler.UpdateUser(_users.First(u => u.Id == deal.UserId));
+                var user = _users.FirstOrDefault(u => u.Id == deal.UserId);
+                if (user != null)
+                {
+                    var card = user.Inventory.OwnedCards.FirstOrDefault(c => c.ID == deal.CardToTrade);
+                    if (card != null)
+                    {
+                        card.InTrade = false;
+                    }
+                }
+                try { _databaseHandler.SaveTrade(_tradingDeals); }
+                catch (Exception ex) { Console.WriteLine($"Error: {ex.Message}"); throw; }
+                if (user != null)
+                {
+                    _databaseHandler.UpdateUser(user);
+                }
             }
         }
 
@@ -320,6 +330,11 @@ namespace SemesterProjekt1
             var deal = GetTradingDealById(dealId);
             if (deal != null)
             {
+                if (deal.UserId == userId)
+                {
+                    throw new InvalidOperationException("You can't trade with yourself.");
+                }
+
                 var user = GetUserById(userId);
                 var card = user.Inventory.OwnedCards.FirstOrDefault(c => c.ID == cardId);
 
@@ -338,6 +353,9 @@ namespace SemesterProjekt1
 
                         owner.Inventory.OwnedCards.First(c => c.ID == card.ID).InTrade = false;
                         user.Inventory.OwnedCards.First(c => c.ID == cardToTrade.ID).InTrade = false;
+
+                        owner.Inventory.OwnedCards.First(c => c.ID == card.ID).UserID = owner.Id;
+                        user.Inventory.OwnedCards.First(c => c.ID == cardToTrade.ID).UserID = user.Id;
 
                         DeleteTradingDeal(dealId);
                         _databaseHandler.UpdateUser(owner);
