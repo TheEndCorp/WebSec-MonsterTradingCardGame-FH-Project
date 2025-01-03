@@ -67,9 +67,9 @@ namespace SemesterProjekt1
                             if (bytesRead > 0)
                             {
                                 await memoryStream.WriteAsync(buffer, 0, bytesRead);
-                                memoryStream.Position = 0; // Reset position for reading
+                                memoryStream.Position = 0;
 
-                                // Convert the MemoryStream to a string for the request
+                                // Convert the MemoryStream to a string for the request for better understanding and debugging first time
                                 string requestText = Encoding.UTF8.GetString(memoryStream.ToArray(), 0, (int)memoryStream.Length);
 
                                 Console.BackgroundColor = ConsoleColor.DarkBlue;
@@ -158,7 +158,7 @@ namespace SemesterProjekt1
         {
             try
             {
-                memoryStream.Position = 0; // Reset position for reading
+                memoryStream.Position = 0;
                 using var reader = new StreamReader(memoryStream);
                 using var writer = new StreamWriter(networkStream) { AutoFlush = true };
 

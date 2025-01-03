@@ -1,4 +1,5 @@
-﻿using System.Text;
+﻿using System.Collections.Concurrent;
+using System.Text;
 using System.Text.Json;
 
 // 20 hours already Wasted from HTTPLISTENER -> TCP ANDWiwkndiunwaidon Day 3 Note of this shit
@@ -19,6 +20,8 @@ namespace SemesterProjekt1
 
     public class UserServiceRequest
     {
+        private static ConcurrentQueue<User> _battleQueue = new ConcurrentQueue<User>();
+        private static ConcurrentDictionary<int, TaskCompletionSource<string>> _userResponses = new ConcurrentDictionary<int, TaskCompletionSource<string>>();
         private HTMLGEN _htmlgen;
         public UserServiceHandler _userServiceHandler;
 
@@ -312,26 +315,95 @@ namespace SemesterProjekt1
 
         private async Task HandleBattleRequestAsync(StreamReader request, StreamWriter response)
         {
-            var user1 = await IsIdentiyYesUserCookie(request, response);
-            var user2 = await IsIdentiyYesUserCookie(request, response);
+            var user = await IsIdentiyYesUserCookie(request, response);
 
-            if (user1 != null && user2 != null)
+            if (user == null)
             {
-                var fightLogic = new FightLogic(user1, user2);
-                var battleResult = await fightLogic.StartBattleAsync();
-
-                user1.Inventory.ELO = fightLogic.User1.Inventory.ELO;
-                user2.Inventory.ELO = fightLogic.User2.Inventory.ELO;
-
-                _userServiceHandler.UpdateUserInventory(user1);
-                _userServiceHandler.UpdateUserInventory(user2);
-
-                string jsonResponse = SerializeToJson(battleResult);
-                SendResponse(response, jsonResponse, "application/json", HttpStatusCode.OK);
+                SendErrorResponse(response, HttpStatusCode.Unauthorized, "Invalid user");
+                return;
             }
-            else
+
+            lock (_battleQueue)
             {
-                SendErrorResponse(response, HttpStatusCode.Unauthorized, "Invalid users for battle");
+                if (_battleQueue.Any(u => u.Id == user.Id))
+                {
+                    SendErrorResponse(response, HttpStatusCode.BadRequest, "User already in queue");
+                    return;
+                }
+                _battleQueue.Enqueue(user);
+            }
+
+            var tcs = new TaskCompletionSource<string>();
+            _userResponses[user.Id] = tcs;
+
+            try
+            {
+                if (_battleQueue.Count >= 2)
+                {
+                    lock (_battleQueue)
+                    {
+                        if (_battleQueue.Count >= 2 &&
+                            _battleQueue.TryDequeue(out var user1) &&
+                            _battleQueue.TryDequeue(out var user2))
+                        {
+                            if (user1.Id == user2.Id)
+                            {
+                                SendErrorResponse(response, HttpStatusCode.BadRequest, "Cannot fight yourself");
+                                return;
+                            }
+
+                            Console.WriteLine(user1.Username);
+                            Console.WriteLine(user2.Username);
+
+                            var fightLogic = new FightLogic(user1, user2);
+                            var battleResult = fightLogic.StartBattleAsync();
+
+                            UpdateELO(fightLogic, user1, user2);
+
+                            string jsonResponse = SerializeToJson(battleResult);
+
+                            CompleteBattleResponse(user1.Id, jsonResponse);
+                            CompleteBattleResponse(user2.Id, jsonResponse);
+                        }
+                    }
+                }
+
+                string result = await tcs.Task;
+                SendResponse(response, result, "application/json", HttpStatusCode.OK);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error handling request: {ex.Message}");
+                SendErrorResponse(response, HttpStatusCode.InternalServerError, "An error occurred while processing the request.");
+            }
+            finally
+            {
+                _userResponses.TryRemove(user.Id, out _);
+            }
+        }
+
+        private void UpdateELO(FightLogic fightLogic, User user1, User user2)
+        {
+            if (fightLogic.winner == user1.Username)
+            {
+                user1.Inventory.ELO += 3;
+                user2.Inventory.ELO -= 5;
+            }
+            else if (fightLogic.winner == user2.Username)
+            {
+                user2.Inventory.ELO += 3;
+                user1.Inventory.ELO -= 5;
+            }
+
+            _userServiceHandler.UpdateUser(user1.Id, user1);
+            _userServiceHandler.UpdateUser(user2.Id, user2);
+        }
+
+        private void CompleteBattleResponse(int userId, string jsonResponse)
+        {
+            if (_userResponses.TryRemove(userId, out var tcs))
+            {
+                tcs.SetResult(jsonResponse);
             }
         }
 

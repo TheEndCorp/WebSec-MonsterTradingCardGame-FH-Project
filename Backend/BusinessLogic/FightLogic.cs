@@ -9,6 +9,7 @@ namespace SemesterProjekt1
         private List<Card> player2Deck;
         private Random random;
         public StringBuilder battleLog { get; set; }
+        public string winner { get; set; }
         public User User1;
         public User User2;
 
@@ -124,21 +125,21 @@ namespace SemesterProjekt1
             {
                 damage = 0;
             }
-            else if (attacker.Name == "Wizzard" && defender.Name == "Ork")
+            else if (attacker.Name == "Ork" && defender.Name == "Wizzard")
             {
                 damage = 0;
             }
-            else if (attacker.Name == "Knight" && defender is SpellCard && defender.Element == ElementType.Water)
+            else if (attacker is SpellCard && attacker.Element == ElementType.Water && defender.Name == "Knight")
             {
-                damage = int.MaxValue; // Sofortige Niederlage
+                damage = int.MaxValue;
             }
-            else if (attacker.Name == "Kraken" && defender is SpellCard)
+            else if (attacker is SpellCard && defender.Name == "Kraken")
             {
-                damage = 0; // Immun gegen Zauber
+                damage = 0;
             }
-            else if (attacker.Name == "FireElf" && defender.Name == "Dragon")
+            else if (attacker.Name == "Dragon" && defender.Name == "FireElf")
             {
-                damage = 0; // Weicht Angriffen aus
+                damage = 0;
             }
 
             return damage;
@@ -189,12 +190,14 @@ namespace SemesterProjekt1
 
             if (player1DeckCopy.Count > player2DeckCopy.Count)
             {
-                battleLog.AppendLine($"Spieler 1 ({User1.Username}) gewinnt den Kampf!");
+                this.winner = User1.Username;
+                battleLog.AppendLine($"Spieler 1 ({User1.Username}) gewinnt den Kampf gegen ({User2.Username})!");
                 result["winner"] = User1.Username;
             }
             else if (player2DeckCopy.Count > player1DeckCopy.Count)
             {
-                battleLog.AppendLine($"Spieler 2 ({User2.Username}) gewinnt den Kampf!");
+                this.winner = User2.Username;
+                battleLog.AppendLine($"Spieler 2 ({User2.Username}) gewinnt den Kampf gegen ({User1.Username})!");
                 result["winner"] = User2.Username;
             }
             else
