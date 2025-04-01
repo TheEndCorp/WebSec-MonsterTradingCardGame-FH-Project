@@ -358,8 +358,10 @@ namespace SemesterProjekt1
                             var fightLogic = new FightLogic(user1, user2);
                             var battleResult = fightLogic.StartBattleAsync();
 
+                            // Update user ELO
                             UpdateELO(fightLogic, user1, user2);
 
+                            // Serialize response
                             string jsonResponse = SerializeToJson(battleResult);
 
                             CompleteBattleResponse(user1.Id, jsonResponse);

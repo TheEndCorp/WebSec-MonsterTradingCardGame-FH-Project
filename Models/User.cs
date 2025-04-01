@@ -1,7 +1,5 @@
 ﻿using System.Net.NetworkInformation;
 using System.Text.Json.Serialization;
-using System.Xml.Linq;
-using static System.Net.Mime.MediaTypeNames;
 
 namespace SemesterProjekt1
 {
@@ -63,8 +61,6 @@ namespace SemesterProjekt1
             set { _name = value; }
         }
 
-
-
         ~User()
         {
             Console.WriteLine($"User {_username}, {_password} wird zerstört.");
@@ -92,7 +88,6 @@ namespace SemesterProjekt1
             this._image = image ?? string.Empty;
             this._bio = bio ?? string.Empty;
             this._name = name ?? string.Empty;
-
         }
 
         public void GetNextAvailableId(List<User> userlist)
