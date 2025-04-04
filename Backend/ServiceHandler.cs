@@ -1,4 +1,5 @@
-﻿using System.Net;
+﻿using SemesterProjekt1;
+using System.Net;
 
 namespace SemesterProjekt1
 {
@@ -203,16 +204,17 @@ namespace SemesterProjekt1
                 {
                     user.Inventory.OpenCardPack(user.Inventory.CardPacks[0]);
                     user.Inventory.CardPacks.Remove(user.Inventory.CardPacks[0]);
-                    List<Card> Liste = new List<Card>(user.Inventory.JustOpened);
+                    List<Card> cards = new List<Card>(user.Inventory.JustOpened);
                     user.Inventory.JustOpenedClear();
 
                     _databaseHandler.UpdateUser(user);
                     _users[_users.FindIndex(u => u.Id == user.Id)] = user;
 
-                    return Liste;
+                    return cards;
                 }
             }
-            return null;
+    
+            return new List<Card>();
         }
 
         public void SaveDeck(int userId, List<Card> deck)
@@ -256,6 +258,100 @@ namespace SemesterProjekt1
             }
             return user;
         }
+
+
+        public User AddCardToDeckHTTPVersion(int userId, string username, string password, int[] cardpos)
+        {
+            var user = _users.Find(p => p.Id == userId && p.Username == username && p.Password == password);
+            if (user != null && AuthenticateUser(username, password) != null)
+            {
+                if (user.Inventory.Deck.Cards.Count != 0 && user.Inventory.OwnedCards.Count != 0)
+                {
+                    var cardsList = user.Inventory.OwnedCards;
+                    foreach (var card in cardsList)
+                    {
+                        if (card.InTrade == true)
+                        {
+                            throw new InvalidOperationException("Card is in trade.");
+                        }
+                        else
+                        {
+                            user.Inventory.Deck.Cards.Remove(card);
+                            card.InDeck = false;
+                        }
+                    }
+                }
+                if (user.Inventory.OwnedCards.Count > 0)
+                {
+                    var cardsList = user.Inventory.OwnedCards;
+                    foreach (var pos in cardpos)
+                    {
+                        if (cardsList[pos].InTrade == true)
+                        {
+                            throw new InvalidOperationException("Card is in trade.");
+                        }
+                        else
+                        {
+                            user.Inventory.Deck.AddCard(cardsList[pos]);
+                            user.Inventory.OwnedCards[pos].InDeck = true;
+                        }
+                    }
+                    _databaseHandler.UpdateUser(user);
+                    _users[_users.FindIndex(u => u.Id == user.Id)] = user;
+                }
+            }
+            return user;
+        }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        public User RemoveAllCardsFromDeck(int userId, string username, string password)
+        {
+            var user = _users.Find(p => p.Id == userId && p.Username == username && p.Password == password);
+            if (user != null && AuthenticateUser(username, password) != null)
+            {
+                if (user.Inventory.Deck.Cards.Count != 0 && user.Inventory.OwnedCards.Count != 0)
+                {
+                    var cardsList = user.Inventory.OwnedCards;
+                    foreach (var card in cardsList)
+                    {
+                        if (card.InTrade == true)
+                        {
+                            throw new InvalidOperationException("Card is in trade.");
+                        }
+                        else
+                        {
+                            user.Inventory.Deck.Cards.Remove(card);
+                            card.InDeck = false;
+                        }
+                    }
+                    _databaseHandler.UpdateUser(user);
+                    _users[_users.FindIndex(u => u.Id == user.Id)] = user;
+                }
+            }
+            return user;
+        }
+
+
+
+
+
+
+
+
+
 
         public List<TradingLogic> GetAllTradingDeals()
         {
