@@ -1,6 +1,7 @@
 using Microsoft.Data.Sqlite;
 using Newtonsoft.Json;
 using Npgsql;
+using System.Configuration;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using static SemesterProjekt1.CardData;
@@ -11,7 +12,7 @@ namespace SemesterProjekt1
     public class DatabaseHandler2
     {
         private readonly string _sqliteConnectionString = "Data Source=database.db;";
-        private readonly string _postgresConnectionString = "Host=localhost;Port=10002;Username=postgres;Password=postgres;Database=postgres";
+        private readonly string _postgresConnectionString = ConfigurationManager.AppSettings["DataBasePath"];
         private bool _usePostgres;
 
         public DatabaseHandler2()

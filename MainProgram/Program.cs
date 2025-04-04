@@ -1,5 +1,9 @@
-﻿using System.Net;
+﻿using System.Configuration;
+using System.Net;
+using System.Net.Security;
 using System.Net.Sockets;
+using System.Security.Authentication;
+using System.Security.Cryptography.X509Certificates;
 
 //using System.Net.WebSockets;
 using System.Security.Principal;
@@ -10,7 +14,7 @@ namespace SemesterProjekt1
     internal class Program
     {
         private static TcpListener listener;
-        // private static ConcurrentDictionary<WebSocket, string?> _sockets = new ConcurrentDictionary<WebSocket, string?>();
+        private static X509Certificate2 serverCertificate;
 
         private static async Task Main()
         {
@@ -22,18 +26,28 @@ namespace SemesterProjekt1
             string localIPAddress = IsAdministrator() ? GetLocalIPAddress() : "127.0.0.1";
             listener = new TcpListener(IPAddress.Parse(localIPAddress), 10001);
             listener.Start();
+            string certificatePath = ConfigurationManager.AppSettings["CertificatePath"];
+            string certificatePassword = ConfigurationManager.AppSettings["CertificatePassword"];
 
-            Console.WriteLine($"Server gestartet auf http://{localIPAddress}:10001/");
+            if (certificatePath == null || certificatePassword == null)
+            {
+                Console.WriteLine("Zertifikatspfad oder Passwort ist nicht konfiguriert.");
+                return;
+            }
+
+            // Laden Sie Ihr SSL-Zertifikat
+            serverCertificate = new X509Certificate2(certificatePath, certificatePassword);
+
+            Console.WriteLine($"Server gestartet auf https://{localIPAddress}:10001/");
 
             UserServiceRequest requester = new UserServiceRequest();
-            //  SocketRequester socketRequester = new SocketRequester(requester._userServiceHandler);
 
             while (true)
             {
                 try
                 {
                     TcpClient client = await listener.AcceptTcpClientAsync();
-                    _ = Task.Run(() => HandleClientAsync(client, requester /*, socketRequester*/));
+                    _ = Task.Run(() => HandleClientAsync(client, requester));
                 }
                 catch (Exception ex)
                 {
@@ -49,87 +63,80 @@ namespace SemesterProjekt1
             return principal.IsInRole(WindowsBuiltInRole.Administrator);
         }
 
-        private static async Task HandleClientAsync(TcpClient client, UserServiceRequest requester/*, SocketRequester socketRequester*/)
+        private static async Task HandleClientAsync(TcpClient client, UserServiceRequest requester)
         {
             try
             {
                 using (var networkStream = client.GetStream())
+                using (var sslStream = new SslStream(networkStream, true))
                 {
-                    if (networkStream.CanRead && networkStream.CanWrite)
+                    try
                     {
-                        using (MemoryStream memoryStream = new MemoryStream())
+                        await sslStream.AuthenticateAsServerAsync(serverCertificate, clientCertificateRequired: false, enabledSslProtocols: SslProtocols.Tls12 | SslProtocols.Tls13, checkCertificateRevocation: true);
+
+                        if (sslStream.CanRead && sslStream.CanWrite)
                         {
-                            byte[] buffer = new byte[4096];
-                            int bytesRead;
-
-                            bytesRead = await networkStream.ReadAsync(buffer, 0, buffer.Length);
-
-                            if (bytesRead > 0)
+                            using (MemoryStream memoryStream = new MemoryStream())
                             {
-                                await memoryStream.WriteAsync(buffer, 0, bytesRead);
-                                memoryStream.Position = 0;
+                                byte[] buffer = new byte[4096];
+                                int bytesRead;
 
-                                // Convert the MemoryStream to a string for the request for better understanding and debugging first time
-                                string requestText = Encoding.UTF8.GetString(memoryStream.ToArray(), 0, (int)memoryStream.Length);
+                                bytesRead = await sslStream.ReadAsync(buffer, 0, buffer.Length);
 
-                                Console.BackgroundColor = ConsoleColor.DarkBlue;
-                                Console.WriteLine($"Received request:\n{requestText}");
-                                Console.ResetColor();
-
-                                // Parse HTTP request
-                                string[] requestLines = requestText.Split(new[] { "\r\n\r\n" }, 2, StringSplitOptions.None);
-                                if (requestLines.Length < 2)
+                                if (bytesRead > 0)
                                 {
-                                    SendErrorResponse(networkStream);
-                                    return;
-                                }
+                                    await memoryStream.WriteAsync(buffer, 0, bytesRead);
+                                    memoryStream.Position = 0;
 
-                                string requestLine = requestLines[0];
-                                string[] requestParts = requestLine.Split(' ');
+                                    string requestText = Encoding.UTF8.GetString(memoryStream.ToArray(), 0, (int)memoryStream.Length);
 
-                                if (requestParts.Length < 2)
-                                {
-                                    SendErrorResponse(networkStream);
-                                    return;
-                                }
+                                    Console.BackgroundColor = ConsoleColor.DarkBlue;
+                                    Console.WriteLine($"Received request:\n{requestText}");
+                                    Console.ResetColor();
 
-                                string method = requestParts[0];
-                                string path = requestParts[1];
-
-                                // Validate method and path
-                                if (!IsValidHttpMethod(method) || !IsValidPath(path))
-                                {
-                                    SendErrorResponse(networkStream);
-                                    return;
-                                }
-
-                                // Handle WebSocket upgrade or HTTP request based on path
-                                /*    if (requestText.Contains("Upgrade: websocket"))
+                                    string[] requestLines = requestText.Split(new[] { "\r\n\r\n" }, 2, StringSplitOptions.None);
+                                    if (requestLines.Length < 2)
                                     {
-                                        Console.WriteLine("WebSocket request detected.");
-                                        await HandleSocketRequestAsync(socketRequester, client, path);
+                                        SendErrorResponse(sslStream);
+                                        return;
                                     }
-                                    else if (path == "/login2")
+
+                                    string requestLine = requestLines[0];
+                                    string[] requestParts = requestLine.Split(' ');
+
+                                    if (requestParts.Length < 2)
                                     {
-                                        Console.WriteLine("HTTP request for login page.");
-                                        await SendHttpResponseAsync(networkStream, GenerateLoginPageHtml());
+                                        SendErrorResponse(sslStream);
+                                        return;
                                     }
-                                    else if (path == "/login3")
+
+                                    string method = requestParts[0];
+                                    string path = requestParts[1];
+
+                                    if (!IsValidHttpMethod(method) || !IsValidPath(path))
                                     {
-                                        Console.WriteLine("HTTP request for fight lobby.");
-                                        await SendHttpResponseAsync(networkStream, GenerateFightLobbyHtml());
-                                    }*/
-                                else
-                                {
+                                        SendErrorResponse(sslStream);
+                                        return;
+                                    }
+
                                     Console.WriteLine("Generic HTTP request received.");
-                                    await HandleRequestAsync(memoryStream, networkStream, method, path, requester);
+                                    await HandleRequestAsync(memoryStream, sslStream, method, path, requester);
                                 }
                             }
                         }
+                        else
+                        {
+                            Console.WriteLine("SslStream is not readable or writable.");
+                        }
                     }
-                    else
+                    catch (AuthenticationException e)
                     {
-                        Console.WriteLine("NetworkStream is not readable or writable.");
+                        Console.WriteLine($"Authentication failed: {e.Message}");
+                        if (e.InnerException != null)
+                        {
+                            Console.WriteLine($"Inner exception: {e.InnerException.Message}");
+                        }
+                        client.Close();
                     }
                 }
             }
@@ -143,6 +150,25 @@ namespace SemesterProjekt1
             }
         }
 
+        private static bool ValidateClientCertificate(object sender, X509Certificate certificate, X509Chain chain, SslPolicyErrors sslPolicyErrors)
+        {
+            if (sslPolicyErrors == SslPolicyErrors.None)
+            {
+                return true;
+            }
+
+            Console.WriteLine($"Certificate error: {sslPolicyErrors}");
+            if ((sslPolicyErrors & SslPolicyErrors.RemoteCertificateChainErrors) != 0)
+            {
+                foreach (X509ChainStatus status in chain.ChainStatus)
+                {
+                    Console.WriteLine($"Chain error: {status.StatusInformation}");
+                }
+            }
+
+            return false;
+        }
+
         private static bool IsValidHttpMethod(string method)
         {
             string[] validMethods = { "GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD" };
@@ -154,134 +180,22 @@ namespace SemesterProjekt1
             return !string.IsNullOrEmpty(path) && path.Length <= 2048 && !path.Contains("..");
         }
 
-        private static async Task HandleRequestAsync(MemoryStream memoryStream, NetworkStream networkStream, string method, string path, UserServiceRequest requester)
+        private static async Task HandleRequestAsync(MemoryStream memoryStream, SslStream sslStream, string method, string path, UserServiceRequest requester)
         {
             try
             {
                 memoryStream.Position = 0;
                 using var reader = new StreamReader(memoryStream);
-                using var writer = new StreamWriter(networkStream) { AutoFlush = true };
+                using var writer = new StreamWriter(sslStream) { AutoFlush = true };
 
                 await requester.HandleRequestAsync(reader, writer, method, path);
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"Error handling request: {ex.Message}");
-                SendErrorResponse(networkStream);
+                SendErrorResponse(sslStream);
             }
         }
-
-        /*
-                        private static async Task HandleSocketRequestAsync(SocketRequester socketRequester, TcpClient client, string path)
-                        {
-                            await socketRequester.HandleRequestAsync(path, client);
-                            await Task.Run(() => socketRequester._userServiceHandler._databaseHandler.SaveUsers(socketRequester._userServiceHandler._users));
-                            Console.WriteLine("Action");
-                        }
-
-                       private static async Task SendHttpResponseAsync(NetworkStream networkStream, string content, string contentType = "text/html")
-                       {
-                           string response = $"HTTP/1.1 200 OK\r\nContent-Type: {contentType}\r\nContent-Length: {Encoding.UTF8.GetByteCount(content)}\r\n\r\n{content}";
-                           byte[] responseBytes = Encoding.UTF8.GetBytes(response);
-                           await networkStream.WriteAsync(responseBytes, 0, responseBytes.Length);
-                           await networkStream.FlushAsync();  // Ensure data is sent immediately.
-                           Console.WriteLine("HTTP response sent to client.");
-                       }
-
-                       private static string GenerateLoginPageHtml()
-                       {
-                           return @"
-                               <html>
-                                   <head>
-                                       <title>WebSocket Lobby</title>
-                                       <script>
-                                           var socket;
-                                           function connect() {
-                                               socket = new WebSocket('ws://' + window.location.host + '/lobby2');
-                                               socket.onopen = function() {
-                                                   console.log('Connected to WebSocket server');
-                                               };
-                                               socket.onmessage = function(event) {
-                                                   var messages = document.getElementById('messages');
-                                                   messages.value += event.data + '\\n';
-                                               };
-                                               socket.onclose = function() {
-                                                   console.log('Disconnected from WebSocket server');
-                                               };
-                                           }
-
-                                           function sendMessage() {
-                                               var messageInput = document.getElementById('messageInput');
-                                               if (messageInput.value.trim() !== '') {
-                                                   socket.send(messageInput.value);
-                                                   messageInput.value = '';
-                                               }
-                                           }
-                                       </script>
-                                   </head>
-                                   <body>
-                                       <h1>WebSocket Lobby</h1>
-                                       <button onclick='connect()'>Connect to WebSocket</button>
-                                       <br/><br/>
-                                       <textarea id='messages' rows='10' cols='50' readonly></textarea>
-                                       <br/>
-                                       <input type='text' id='messageInput' placeholder='Enter message...' />
-                                       <button onclick='sendMessage()'>Send</button>
-                                   </body>
-                               </html>";
-                       }
-
-                       private static string GenerateFightLobbyHtml()
-                       {
-                           return @"
-                           <!DOCTYPE html>
-                           <html lang='en'>
-                               <head>
-                                   <meta charset='UTF-8'>
-                                   <title>Fight Lobby</title>
-                                   <script>
-                                       let socket;
-                                       let rematchTimeout;
-
-                                       function connect() {
-                                           socket = new WebSocket('ws://' + window.location.host + '/lobby3');
-                                           socket.onopen = function() {
-                                               console.log('Connected to WebSocket for fight.');
-                                               document.getElementById('log').innerHTML = '<p>Waiting for an opponent...</p>';
-                                           };
-                                           socket.onmessage = function(event) {
-                                               const logDiv = document.getElementById('log');
-                                               const message = event.data;
-                                               logDiv.innerHTML += `<p>${message}</p>`;
-                                               if (message.includes('Kampf beendet!')) {
-                                                   document.getElementById('rematchButton').style.display = 'block';
-                                                   rematchTimeout = setTimeout(() => {
-                                                       document.getElementById('rematchButton').style.display = 'none';
-                                                       socket.close();
-                                                   }, 20000);
-                                               }
-                                           };
-                                           socket.onclose = function() {
-                                               window.location.href = '/'; // Redirect to home page
-                                           };
-                                       }
-
-                                       function rematch() {
-                                           clearTimeout(rematchTimeout);
-                                           socket.send('rematch');
-                                           document.getElementById('log').innerHTML = '';
-                                           document.getElementById('rematchButton').style.display = 'none';
-                                       }
-                                   </script>
-                               </head>
-                               <body onload='connect()'>
-                                   <h1>Fight Lobby</h1>
-                                   <div id='log'></div>
-                                   <button id='rematchButton' style='display:none;' onclick='rematch()'>Rematch</button>
-                               </body>
-                           </html>";
-                       }
-               */
 
         private static string GetLocalIPAddress()
         {
