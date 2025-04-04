@@ -87,7 +87,7 @@ namespace SemesterProjekt1
         {
             if (this.Cards == null)
             {
-                var cards = GenerateCards(5 * ((int)Rarity / 2), userId);
+                var cards = GenerateCards(3 + (int)Math.Ceiling((int)Rarity / 2.0), userId);
                 return cards;
             }
             else

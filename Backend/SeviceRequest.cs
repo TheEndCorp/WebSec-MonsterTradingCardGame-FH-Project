@@ -1,4 +1,7 @@
-﻿using System.Collections.Concurrent;
+﻿using Newtonsoft.Json.Linq;
+using System.Collections.Concurrent;
+using System.IO;
+using System.Net.Mime;
 using System.Text;
 using System.Text.Json;
 
@@ -461,6 +464,11 @@ namespace SemesterProjekt1
         private async Task HandleLoginAsync(StreamReader request, StreamWriter response)
         {
             var user = await IsIdentiyYesUser(request, response);
+            if (user == null)
+            {
+                user = await IsIdentiyYesUserCookie(request, response);
+            }
+
             if (user != null)
             {
                 string token = $"{user.Username}-mtcgToken";
@@ -530,6 +538,7 @@ namespace SemesterProjekt1
             {
                 writer.WriteLine("HTTP/1.1 200 OK");
                 writer.WriteLine("Set-Cookie: userData=; Expires=Thu, 01 Jan 1970 00:00:00 GMT");
+                writer.WriteLine("Set-Cookie: authToken=; Expires=Thu, 01 Jan 1970 00:00:00 GMT");
                 writer.WriteLine("Content-Type: text/plain");
                 writer.WriteLine();
                 writer.WriteLine("Logged out successfully.");
@@ -603,7 +612,7 @@ namespace SemesterProjekt1
                         return;
                     }
 
-                    _userServiceHandler.UpdateUserInventory(user.Id, user);
+                    _userServiceHandler.UpdateUser(user.Id, user);
 
                     string jsonResponse = SerializeToJson(new { message = "Packs bought successfully" });
                     writer.WriteLine("HTTP/1.1 200 OK");
@@ -679,7 +688,7 @@ namespace SemesterProjekt1
                     if (cardIndices != null)
                     {
                         int[] cardPositions = cardIndices.Select(index => index).ToArray();
-                        _userServiceHandler.AddCardToDeck(user.Id, user.Username, user.Password, cardPositions);
+                        _userServiceHandler.AddCardToDeckHTTPVersion(user.Id, user.Username, user.Password, cardPositions);
                         SendResponse(writer, "Cards added to deck successfully.", "text/html");
                     }
                     else

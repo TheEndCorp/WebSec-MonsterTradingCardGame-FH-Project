@@ -47,7 +47,7 @@
                     <button onclick='window.location.href=""/users"";'>Show All Users</button>
                     <button onclick='window.location.href=""/login"";'>Login</button>";
 
-            for (int i = 1; i <= size; i++)
+            for (int i = 0; i < size; i++)
             {
                 htmlResponse += $@"<button onclick='window.location.href=""/user/{i}"";'>Show User with ID {i}</button>";
             }
@@ -59,66 +59,68 @@
         public string GenerateInventoryHtml(Inventory inventory)
         {
             string html = $@"
-               <!DOCTYPE html>
-               <html lang='en'>
-               <head>
-                   <meta charset='UTF-8'>
-                   <title>Inventory</title>
-               </head>
-               <body>
-                   <h1>Inventory</h1>
-                   <h2>Owned Cards</h2>
-                   <form method='post' action='/add-card-to-deck'>
-                       <ul>";
+                <!DOCTYPE html>
+                <html lang='en'>
+                <head>
+                    <meta charset='UTF-8'>
+                    <title>Inventory</title>
+                </head>
+                <body>
+                    <h1>Inventory</h1>
+                    <h2>Manage Your Cards</h2>
+                    <form method='post' action='/add-card-to-deck'>
+                        <h3>All Cards</h3>
+                        <ul>";
 
             foreach (var card in inventory.OwnedCards)
             {
                 int cardIndex = inventory.OwnedCards.IndexOf(card);
+                bool isInDeck = card.InDeck;
                 html += $@"
-                       <li>
-                           <input type='checkbox' name='cardIndices' value='{cardIndex}'>
-                           {cardIndex} : {card.Name} - {card.Damage} Damage - {card.Element} - {card.Type}
-                       </li>";
+                        <li>
+                            <input type='checkbox' name='cardIndices' value='{cardIndex}' {(isInDeck ? "checked" : "")}>
+                            {cardIndex} : {card.Name} - {card.Damage} Damage - {card.Element} - {card.Type} {(isInDeck ? "(In Deck)" : "")}
+                        </li>";
             }
 
             html += $@"
-                       </ul>
-                       <input type='hidden' name='userID' value='{inventory.UserID}' />
-                       <input type='submit' value='Save to Deck'>
-                   </form>
-                   <h2>Cards in Deck</h2>
-                   <ul>";
+                        </ul>
+                        <input type='hidden' name='userID' value='{inventory.UserID}' />
+                        <input type='submit' value='Save to Deck'>
+                    </form>
+                    <h2>Cards in Deck ({inventory.Deck.Cards.Count}/20)</h2>
+                    <ul>";
 
             foreach (var card in inventory.Deck.Cards)
             {
                 html += $@"
-                       <li>
-                           {card.Name} - {card.Damage} Damage - {card.Element} - {card.Type}
-                       </li>";
+                        <li>
+                            {card.Name} - {card.Damage} Damage - {card.Element} - {card.Type}
+                        </li>";
             }
 
             html += $@"
-                   </ul>
-                   <h2>Money: {inventory.Money}</h2>
-                   <form method='post' action='/openpack'>
-                       <input type='hidden' name='userID' value='{inventory.UserID}' />
-                       <input type='submit' value='Open Card Pack'>
-                   </form>
-                   <form method='post' action='/inventory'>
-                       <input type='hidden' name='userID' value='{inventory.UserID}' />
-                       <label for='Amount'>Amount:</label>
-                       <input type='number' id='Amount' name='Amount' required><br>
-                       <input type='submit' value='Buy Card Pack'>
-                   </form>
-                   <form id='joinLobbyForm' method='post' action='/join-lobby'>
-                       <input type='hidden' name='userID' value='{inventory.UserID}' />
-                       <input type='submit' value='Lobby beitreten'>
-                   </form>
+                    </ul>
+                    <h2>Money: {inventory.Money}</h2>
+                    <form method='post' action='/openpack'>
+                        <input type='hidden' name='userID' value='{inventory.UserID}' />
+                        <input type='submit' value='Open Card Pack'>
+                    </form>
+                    <form method='post' action='/inventory'>
+                        <input type='hidden' name='userID' value='{inventory.UserID}' />
+                        <label for='Amount'>Amount:</label>
+                        <input type='number' id='Amount' name='Amount' required><br>
+                        <input type='submit' value='Buy Card Pack'>
+                    </form>
+                    <form id='joinLobbyForm' method='post' action='/battles'>
+                        <input type='hidden' name='userID' value='{inventory.UserID}' />
+                        <input type='submit' value='Lobby beitreten'>
+                    </form>
 
-                   <button onclick='window.location.href=""/logout""'>Logout</button>
+                    <button onclick='window.location.href=""/logout""'>Logout</button>
 
-               </body>
-               </html>";
+                </body>
+                </html>";
             return html;
         }
 
@@ -127,6 +129,7 @@
             string response = $"HTTP/1.1 200 OK\r\nContent-Type: {contentType}\r\nContent-Length: {content.Length}\r\n\r\n{content}";
             stream.Write(response);
             stream.Flush();
+
         }
     }
 }

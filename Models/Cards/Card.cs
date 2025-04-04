@@ -63,7 +63,9 @@ namespace SemesterProjekt1
             this.RarityType = rarityType;
             this.UserID = userID;
             this.InTrade = inTrade;
+
             if (InTrade == true && inDeck == true) this.InDeck = false;
+            else this.InDeck = inDeck;
             //this.InDeck = inDeck;
         }
 
