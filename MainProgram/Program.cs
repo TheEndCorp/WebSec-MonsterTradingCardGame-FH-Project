@@ -1,13 +1,14 @@
-﻿using System.Configuration;
-using System.Net;
+﻿using System.Net;
 using System.Net.Security;
 using System.Net.Sockets;
+using System.Runtime.InteropServices;
 using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
 
 //using System.Net.WebSockets;
 using System.Security.Principal;
 using System.Text;
+using System.Configuration;
 
 namespace SemesterProjekt1
 {
@@ -18,16 +19,21 @@ namespace SemesterProjekt1
 
         private static async Task Main()
         {
-            if (!IsAdministrator())
+            Console.WriteLine($"Betriebssystem: {RuntimeInformation.OSDescription}");
+
+            bool isAdmin = IsAdministrator();
+            if (!isAdmin)
             {
                 Console.WriteLine("Die Anwendung wird nicht im Administratormodus ausgeführt. Verwende 'localhost' als lokale IP-Adresse.");
             }
 
-            string localIPAddress = IsAdministrator() ? GetLocalIPAddress() : "127.0.0.1";
+            string localIPAddress = isAdmin ? GetLocalIPAddress() : "127.0.0.1";
             listener = new TcpListener(IPAddress.Parse(localIPAddress), 10001);
             listener.Start();
-            string certificatePath = ConfigurationManager.AppSettings["CertificatePath"];
-            string certificatePassword = ConfigurationManager.AppSettings["CertificatePassword"];
+            string certificatePath = ConfigurationManager.AppSettings["CERTIFICATE_PATH"] ??
+                                      Environment.GetEnvironmentVariable("CERTIFICATE_PATH");
+
+            string certificatePassword = ConfigurationManager.AppSettings["CERTIFICATE_PASSWORD"] ?? Environment.GetEnvironmentVariable("CERTIFICATE_PASSWORD");
 
             if (certificatePath == null || certificatePassword == null)
             {
@@ -58,10 +64,43 @@ namespace SemesterProjekt1
 
         private static bool IsAdministrator()
         {
-            var identity = WindowsIdentity.GetCurrent();
-            var principal = new WindowsPrincipal(identity);
-            return principal.IsInRole(WindowsBuiltInRole.Administrator);
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
+                var identity = WindowsIdentity.GetCurrent();
+                var principal = new WindowsPrincipal(identity);
+                return principal.IsInRole(WindowsBuiltInRole.Administrator);
+            }
+            else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ||
+                     RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+            {
+                // Unter Unix/Linux prüfen wir, ob der Benutzer Root-Rechte hat
+                try
+                {
+                    return geteuid() == 0;
+                }
+                catch
+                {
+                    // Fallback falls P/Invoke nicht funktioniert
+                    try
+                    {
+                        // Alternativ können wir überprüfen, ob wir in bestimmte Systembereiche schreiben können
+                        string testFile = "/etc/test_admin_access";
+                        File.WriteAllText(testFile, "test");
+                        File.Delete(testFile);
+                        return true;
+                    }
+                    catch
+                    {
+                        return false;
+                    }
+                }
+            }
+
+            return false;
         }
+
+        [DllImport("libc")]
+        private static extern uint geteuid();
 
         private static async Task HandleClientAsync(TcpClient client, UserServiceRequest requester)
         {
@@ -199,15 +238,24 @@ namespace SemesterProjekt1
 
         private static string GetLocalIPAddress()
         {
-            var host = Dns.GetHostEntry(Dns.GetHostName());
-            foreach (var ip in host.AddressList)
+            try
             {
-                if (ip.AddressFamily == AddressFamily.InterNetwork)
+                var host = Dns.GetHostEntry(Dns.GetHostName());
+                foreach (var ip in host.AddressList)
                 {
-                    return ip.ToString();
+                    if (ip.AddressFamily == AddressFamily.InterNetwork)
+                    {
+                        return ip.ToString();
+                    }
                 }
+                Console.WriteLine("Keine IPv4-Adresse im lokalen Netzwerk gefunden. Verwende localhost.");
+                return "127.0.0.1";
             }
-            throw new Exception("Keine IPv4-Adresse im lokalen Netzwerk gefunden.");
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Fehler beim Abrufen der IP-Adresse: {ex.Message}. Verwende localhost.");
+                return "127.0.0.1";
+            }
         }
 
         private static void SendErrorResponse(Stream stream)
