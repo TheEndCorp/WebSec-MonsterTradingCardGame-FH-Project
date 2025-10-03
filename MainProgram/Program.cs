@@ -1,4 +1,5 @@
-﻿using System.Net;
+﻿using System.Configuration;
+using System.Net;
 using System.Net.Security;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
@@ -8,7 +9,6 @@ using System.Security.Cryptography.X509Certificates;
 //using System.Net.WebSockets;
 using System.Security.Principal;
 using System.Text;
-using System.Configuration;
 
 namespace SemesterProjekt1
 {
@@ -19,8 +19,6 @@ namespace SemesterProjekt1
 
         private static async Task Main()
         {
-            Console.WriteLine($"Betriebssystem: {RuntimeInformation.OSDescription}");
-
             bool isAdmin = IsAdministrator();
             if (!isAdmin)
             {
@@ -64,43 +62,10 @@ namespace SemesterProjekt1
 
         private static bool IsAdministrator()
         {
-            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-            {
-                var identity = WindowsIdentity.GetCurrent();
-                var principal = new WindowsPrincipal(identity);
-                return principal.IsInRole(WindowsBuiltInRole.Administrator);
-            }
-            else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ||
-                     RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
-            {
-                // Unter Unix/Linux prüfen wir, ob der Benutzer Root-Rechte hat
-                try
-                {
-                    return geteuid() == 0;
-                }
-                catch
-                {
-                    // Fallback falls P/Invoke nicht funktioniert
-                    try
-                    {
-                        // Alternativ können wir überprüfen, ob wir in bestimmte Systembereiche schreiben können
-                        string testFile = "/etc/test_admin_access";
-                        File.WriteAllText(testFile, "test");
-                        File.Delete(testFile);
-                        return true;
-                    }
-                    catch
-                    {
-                        return false;
-                    }
-                }
-            }
-
-            return false;
+            var identity = WindowsIdentity.GetCurrent();
+            var principal = new WindowsPrincipal(identity);
+            return principal.IsInRole(WindowsBuiltInRole.Administrator);
         }
-
-        [DllImport("libc")]
-        private static extern uint geteuid();
 
         private static async Task HandleClientAsync(TcpClient client, UserServiceRequest requester)
         {
@@ -111,7 +76,11 @@ namespace SemesterProjekt1
                 {
                     try
                     {
-                        await sslStream.AuthenticateAsServerAsync(serverCertificate, clientCertificateRequired: false, enabledSslProtocols: SslProtocols.Tls12 | SslProtocols.Tls13, checkCertificateRevocation: true);
+                        await sslStream.AuthenticateAsServerAsync(
+    serverCertificate,
+    clientCertificateRequired: false,
+    enabledSslProtocols: SslProtocols.Tls12 | SslProtocols.Tls13,
+    checkCertificateRevocation: false);
 
                         if (sslStream.CanRead && sslStream.CanWrite)
                         {
@@ -170,10 +139,10 @@ namespace SemesterProjekt1
                     }
                     catch (AuthenticationException e)
                     {
-                        Console.WriteLine($"Authentication failed: {e.Message}");
+                        // Console.WriteLine($"Authentication failed: {e.Message}");
                         if (e.InnerException != null)
                         {
-                            Console.WriteLine($"Inner exception: {e.InnerException.Message}");
+                            //   Console.WriteLine($"Inner exception: {e.InnerException.Message}");
                         }
                         client.Close();
                     }
