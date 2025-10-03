@@ -1,4 +1,5 @@
 ﻿using SemesterProjekt1;
+using SemesterProjekt1.Security;
 using System.Net;
 
 namespace SemesterProjekt1
@@ -30,11 +31,11 @@ namespace SemesterProjekt1
         private void InitializeDefaultUsers()
         {
             _users = new List<User>
-                {
-                    new User(0, "Ender", "123"),
-                    new User(1, "John", "test"),
-                    new User(2, "Jane", "test"),
-                };
+            {
+                new User(0, "Ender", PasswordHasher.HashPassword("123")),
+                new User(1, "John", PasswordHasher.HashPassword("test")),
+                new User(2, "Jane", PasswordHasher.HashPassword("test")),
+            };
         }
 
         private void SendResponse(HttpListenerResponse response, string content, string contentType)
@@ -98,6 +99,9 @@ namespace SemesterProjekt1
             {
                 throw new InvalidOperationException("Pffff Buffer Overload Detected.");
             }
+
+            // Hash das Passwort VOR dem Speichern in der DB
+            user.Password = PasswordHasher.HashPassword(user.Password);
             user.GetNextAvailableId(_users);
             _users.Add(user);
             _databaseHandler.SaveUsers(_users);
@@ -111,14 +115,25 @@ namespace SemesterProjekt1
         public void UpdateUser(int id, User updatedUser)
         {
             var user = GetUserById(id);
-            if (!IsValidInput(user.Username) || !IsValidInput(user.Password))
+            if (!IsValidInput(updatedUser.Username) || !IsValidInput(updatedUser.Password))
             {
                 throw new InvalidOperationException("Not Valid Input.");
             }
             if (user != null)
             {
                 user.Username = updatedUser.Username;
-                user.Password = updatedUser.Password;
+
+                // Prüfe ob Passwort bereits gehasht ist (enthält ".")
+                if (!updatedUser.Password.Contains(".") || updatedUser.Password.Split('.').Length != 2)
+                {
+                    // Neues Passwort -> hashen
+                    user.Password = PasswordHasher.HashPassword(updatedUser.Password);
+                }
+                else
+                {
+                    // Bereits gehashtes Passwort -> übernehmen
+                    user.Password = updatedUser.Password;
+                }
 
                 _databaseHandler.UpdateUser(user);
                 _users[_users.FindIndex(u => u.Id == user.Id)] = user;
@@ -157,7 +172,16 @@ namespace SemesterProjekt1
 
         public User AuthenticateUser(string username, string password)
         {
-            return _users.Find(u => u.Username == username && u.Password == password);
+            var user = _users.Find(u => u.Username == username);
+            if (user != null)
+            {
+                // Verifiziere das Passwort mit dem Hash aus der DB
+                if (PasswordHasher.VerifyPassword(password, user.Password))
+                {
+                    return user;
+                }
+            }
+            return null;
         }
 
         public User BuyPacks(int userId, int amount, string username, string password)
@@ -197,7 +221,7 @@ namespace SemesterProjekt1
 
         public List<Card> OpenCardPack(int userId, string username, string password)
         {
-            var user = _users.Find(p => p.Id == userId && p.Username == username && p.Password == password);
+            var user = _users.Find(p => p.Id == userId && p.Username == username);
             if (user != null && AuthenticateUser(username, password) != null)
             {
                 if (user.Inventory.CardPacks.Count > 0)
@@ -213,7 +237,7 @@ namespace SemesterProjekt1
                     return cards;
                 }
             }
-    
+
             return new List<Card>();
         }
 
@@ -234,7 +258,7 @@ namespace SemesterProjekt1
 
         public User AddCardToDeck(int userId, string username, string password, int[] cardpos)
         {
-            var user = _users.Find(p => p.Id == userId && p.Username == username && p.Password == password);
+            var user = _users.Find(p => p.Id == userId && p.Username == username);
             if (user != null && AuthenticateUser(username, password) != null)
             {
                 if (user.Inventory.OwnedCards.Count > 0)
@@ -258,11 +282,10 @@ namespace SemesterProjekt1
             }
             return user;
         }
-
 
         public User AddCardToDeckHTTPVersion(int userId, string username, string password, int[] cardpos)
         {
-            var user = _users.Find(p => p.Id == userId && p.Username == username && p.Password == password);
+            var user = _users.Find(p => p.Id == userId && p.Username == username);
             if (user != null && AuthenticateUser(username, password) != null)
             {
                 if (user.Inventory.Deck.Cards.Count != 0 && user.Inventory.OwnedCards.Count != 0)
@@ -303,23 +326,9 @@ namespace SemesterProjekt1
             return user;
         }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
         public User RemoveAllCardsFromDeck(int userId, string username, string password)
         {
-            var user = _users.Find(p => p.Id == userId && p.Username == username && p.Password == password);
+            var user = _users.Find(p => p.Id == userId && p.Username == username);
             if (user != null && AuthenticateUser(username, password) != null)
             {
                 if (user.Inventory.Deck.Cards.Count != 0 && user.Inventory.OwnedCards.Count != 0)
@@ -343,15 +352,6 @@ namespace SemesterProjekt1
             }
             return user;
         }
-
-
-
-
-
-
-
-
-
 
         public List<TradingLogic> GetAllTradingDeals()
         {
