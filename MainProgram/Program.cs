@@ -80,7 +80,7 @@ namespace SemesterProjekt1
     serverCertificate,
     clientCertificateRequired: false,
     enabledSslProtocols: SslProtocols.Tls12 | SslProtocols.Tls13,
-    checkCertificateRevocation: false);
+    checkCertificateRevocation: true);
 
                         if (sslStream.CanRead && sslStream.CanWrite)
                         {

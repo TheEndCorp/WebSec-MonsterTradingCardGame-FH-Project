@@ -2,12 +2,10 @@
 using System.Collections.Concurrent;
 using System.IO;
 using System.Net.Mime;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-
-// 20 hours already Wasted from HTTPLISTENER -> TCP ANDWiwkndiunwaidon Day 3 Note of this shit
-// 25 and nearly finished
-// i lost track of time :skull: Wakatime gonna save me i guess
+using System.Text.RegularExpressions;
 
 namespace SemesterProjekt1
 {
@@ -18,13 +16,30 @@ namespace SemesterProjekt1
         BadRequest = 400,
         Unauthorized = 401,
         Conflict = 409,
+        TooManyRequests = 429,
         InternalServerError = 500
     }
 
     public class UserServiceRequest
     {
+        // Maximale Request-Größen zur Vermeidung von DoS
+        private const int MAX_REQUEST_SIZE = 1024 * 1024; // 1MB
+
+        private const int MAX_USERNAME_LENGTH = 20;
+        private const int MAX_PASSWORD_LENGTH = 100;
+        private const int MAX_LOGIN_ATTEMPTS = 5;
+        private const int LOCKOUT_DURATION_MINUTES = 15;
+
+        private const int TOKEN_EXPIRY_HOURS = 24;
         private static ConcurrentQueue<User> _battleQueue = new ConcurrentQueue<User>();
         private static ConcurrentDictionary<int, TaskCompletionSource<string>> _userResponses = new ConcurrentDictionary<int, TaskCompletionSource<string>>();
+
+        // Rate Limiting für Login-Versuche
+        private static ConcurrentDictionary<string, (int attempts, DateTime lockoutUntil)> _loginAttempts = new ConcurrentDictionary<string, (int, DateTime)>();
+
+        // Sichere Token-Verwaltung
+        private static ConcurrentDictionary<string, (int userId, DateTime expiry)> _activeTokens = new ConcurrentDictionary<string, (int, DateTime)>();
+
         private HTMLGEN _htmlgen;
         public UserServiceHandler _userServiceHandler;
 
@@ -34,18 +49,111 @@ namespace SemesterProjekt1
             _htmlgen = new HTMLGEN(_userServiceHandler);
         }
 
+        // Sichere Token-Generierung
+        private static string GenerateSecureToken()
+        {
+            byte[] tokenBytes = new byte[32];
+            using (var rng = RandomNumberGenerator.Create())
+            {
+                rng.GetBytes(tokenBytes);
+            }
+            return Convert.ToBase64String(tokenBytes).Replace("+", "-").Replace("/", "_").TrimEnd('=');
+        }
+
+        // Token-Validierung
+        private int? ValidateToken(string token)
+        {
+            if (string.IsNullOrEmpty(token))
+                return null;
+
+            if (_activeTokens.TryGetValue(token, out var tokenData))
+            {
+                if (DateTime.UtcNow < tokenData.expiry)
+                {
+                    return tokenData.userId;
+                }
+                else
+                {
+                    // Abgelaufenes Token entfernen
+                    _activeTokens.TryRemove(token, out _);
+                }
+            }
+            return null;
+        }
+
+        // Rate Limiting Check
+        private bool CheckRateLimit(string identifier)
+        {
+            var now = DateTime.UtcNow;
+
+            if (_loginAttempts.TryGetValue(identifier, out var data))
+            {
+                if (now < data.lockoutUntil)
+                {
+                    return false; // Noch im Lockout
+                }
+
+                if (data.attempts >= MAX_LOGIN_ATTEMPTS)
+                {
+                    // Lockout aktivieren
+                    _loginAttempts[identifier] = (data.attempts, now.AddMinutes(LOCKOUT_DURATION_MINUTES));
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private void IncrementLoginAttempt(string identifier)
+        {
+            _loginAttempts.AddOrUpdate(
+                identifier,
+                (1, DateTime.MinValue),
+                (key, old) => (old.attempts + 1, old.lockoutUntil)
+            );
+        }
+
+        private void ResetLoginAttempts(string identifier)
+        {
+            _loginAttempts.TryRemove(identifier, out _);
+        }
+
         private void SendErrorResponse(StreamWriter writer, HttpStatusCode statusCode, string message)
         {
+            message = SanitizeErrorMessage(message);
+
             writer.WriteLine($"HTTP/1.1 {(int)statusCode} {statusCode}");
             writer.WriteLine("Content-Type: text/plain");
             writer.WriteLine("Content-Length: " + message.Length);
+            writer.WriteLine("X-Content-Type-Options: nosniff");
+            writer.WriteLine("X-Frame-Options: DENY");
+            writer.WriteLine("X-XSS-Protection: 1; mode=block");
+            writer.WriteLine("Strict-Transport-Security: max-age=31536000; includeSubDomains");
+            writer.WriteLine("Content-Security-Policy: default-src 'self'");
             writer.WriteLine();
             writer.Write(message);
             writer.Flush();
         }
 
+        private string SanitizeErrorMessage(string message)
+        {
+            if (string.IsNullOrEmpty(message))
+                return "An error occurred";
+
+            // Entfernt potenziell gefährliche Zeichen und begrenzt Länge
+            message = Regex.Replace(message, @"[<>""']", "");
+            return message.Length > 200 ? message.Substring(0, 200) : message;
+        }
+
         private async Task HandleGetRequestAsync(StreamReader request, StreamWriter response, string path1)
         {
+            // Path Traversal Protection
+            if (path1.Contains("..") || path1.Contains("%2e%2e") || path1.Contains("%00"))
+            {
+                SendErrorResponse(response, HttpStatusCode.BadRequest, "Invalid path");
+                return;
+            }
+
             switch (path1.Split('?')[0])
             {
                 case "/":
@@ -57,17 +165,34 @@ namespace SemesterProjekt1
                     }
                 case "/users":
                     {
+                        var user = await AuthenticateFromToken(request, response);
+                        if (user == null)
+                        {
+                            SendErrorResponse(response, HttpStatusCode.Unauthorized, "Unauthorized");
+                            return;
+                        }
+
                         var allUsers = _userServiceHandler.GetAllUsers();
-                        string jsonResponse = SerializeToJson(allUsers);
+                        // Passwörter aus Response entfernen
+                        var sanitizedUsers = allUsers.Select(u => new
+                        {
+                            u.Id,
+                            u.Username,
+                            u.Name,
+                            u.Bio,
+                            u.Image,
+                            ELO = u.Inventory?.ELO
+                        });
+                        string jsonResponse = SerializeToJson(sanitizedUsers);
                         SendResponse(response, jsonResponse, "application/json");
                         break;
                     }
                 case "/cards":
                     {
-                        var user = await IsIdentiyYesUserCookie(request, response);
+                        var user = await AuthenticateFromToken(request, response);
                         if (user == null)
                         {
-                            SendErrorResponse(response, HttpStatusCode.Unauthorized);
+                            SendErrorResponse(response, HttpStatusCode.Unauthorized, "Unauthorized");
                         }
                         else
                         {
@@ -101,18 +226,11 @@ namespace SemesterProjekt1
                         SendResponse(response, jsonResponse, "application/json");
                         break;
                     }
-                case "/lobby":
-                    {
-                        // _htmlgen.SendLobbyPage(request, response);
-                        break;
-                    }
                 case "/logout":
                     {
-                        await HandleLogout(response);
+                        await HandleLogout(request, response);
                         break;
                     }
-
-                /////////////// CURL Functions
                 case "/tradings":
                     {
                         var deals = _userServiceHandler.GetAllTradingDeals();
@@ -122,24 +240,31 @@ namespace SemesterProjekt1
                     }
                 case "/stats":
                     {
-                        var user = await IsIdentiyYesUserCookie(request, response);
+                        var user = await AuthenticateFromToken(request, response);
                         if (user == null)
                         {
-                            SendErrorResponse(response, HttpStatusCode.Unauthorized);
+                            SendErrorResponse(response, HttpStatusCode.Unauthorized, "Unauthorized");
                         }
                         else
                         {
-                            string jsonResponse = SerializeToJson(user.Inventory.ELO);
+                            var stats = new
+                            {
+                                Username = user.Username,
+                                ELO = user.Inventory.ELO,
+                                CardCount = user.Inventory.OwnedCards.Count,
+                                DeckSize = user.Inventory.Deck.Cards.Count
+                            };
+                            string jsonResponse = SerializeToJson(stats);
                             SendResponse(response, jsonResponse, "application/json");
                         }
                         break;
                     }
                 case "/deck":
                     {
-                        var user = await IsIdentiyYesUserCookie(request, response);
+                        var user = await AuthenticateFromToken(request, response);
                         if (user == null)
                         {
-                            SendErrorResponse(response, HttpStatusCode.Unauthorized);
+                            SendErrorResponse(response, HttpStatusCode.Unauthorized, "Unauthorized");
                         }
                         else
                         {
@@ -164,6 +289,7 @@ namespace SemesterProjekt1
                         response.WriteLine("HTTP/1.1 404 Not Found");
                         response.WriteLine("Content-Length: 0");
                         response.WriteLine();
+                        response.Flush();
                         break;
                     }
             }
@@ -171,6 +297,12 @@ namespace SemesterProjekt1
 
         private async Task HandlePostRequestAsync(StreamReader request, StreamWriter response, string path1)
         {
+            if (path1.Contains("..") || path1.Contains("%2e%2e") || path1.Contains("%00"))
+            {
+                SendErrorResponse(response, HttpStatusCode.BadRequest, "Invalid path");
+                return;
+            }
+
             switch (path1)
             {
                 case "/users":
@@ -193,7 +325,6 @@ namespace SemesterProjekt1
                     await HandleAddCardToDeckAsync(request, response);
                     break;
 
-                /////////////// CURL Functions
                 case "/tradings":
                     await HandleAddTradingDealAsync(request, response);
                     break;
@@ -229,6 +360,12 @@ namespace SemesterProjekt1
 
         private async Task HandlePutRequestAsync(StreamReader request, StreamWriter response, string path1)
         {
+            if (path1.Contains("..") || path1.Contains("%2e%2e") || path1.Contains("%00"))
+            {
+                SendErrorResponse(response, HttpStatusCode.BadRequest, "Invalid path");
+                return;
+            }
+
             switch (path1)
             {
                 case "/deck":
@@ -250,6 +387,12 @@ namespace SemesterProjekt1
 
         private async Task HandleDeleteRequestAsync(StreamReader request, StreamWriter response, string path1)
         {
+            if (path1.Contains("..") || path1.Contains("%2e%2e") || path1.Contains("%00"))
+            {
+                SendErrorResponse(response, HttpStatusCode.BadRequest, "Invalid path");
+                return;
+            }
+
             switch (path1)
             {
                 case string path when path1.StartsWith("/tradings/"):
@@ -267,7 +410,7 @@ namespace SemesterProjekt1
 
         private async Task HandleConfigureDeckAsync(StreamReader reader, StreamWriter writer)
         {
-            var user = await IsIdentiyYesUserCookie(reader, writer);
+            var user = await AuthenticateFromToken(reader, writer);
             if (user != null)
             {
                 string requestBody = await ReadRequestBodyAsync(reader, writer);
@@ -279,6 +422,13 @@ namespace SemesterProjekt1
                         if (cardIds.Count < 4)
                         {
                             SendErrorResponse(writer, HttpStatusCode.BadRequest, "A deck must contain at least 4 cards.");
+                            return;
+                        }
+
+                        if (cardIds.Count > 20)
+                        {
+                            SendErrorResponse(writer, HttpStatusCode.BadRequest, "A deck cannot contain more than 20 cards.");
+                            return;
                         }
 
                         var cards = user.Inventory.OwnedCards
@@ -307,7 +457,7 @@ namespace SemesterProjekt1
                 }
                 catch (JsonException ex)
                 {
-                    SendErrorResponse(writer, HttpStatusCode.BadRequest, $"Invalid JSON format: {ex.Message}");
+                    SendErrorResponse(writer, HttpStatusCode.BadRequest, "Invalid JSON format");
                 }
             }
             else
@@ -318,7 +468,7 @@ namespace SemesterProjekt1
 
         private async Task HandleBattleRequestAsync(StreamReader request, StreamWriter response)
         {
-            var user = await IsIdentiyYesUserCookie(request, response);
+            var user = await AuthenticateFromToken(request, response);
 
             if (user == null)
             {
@@ -361,10 +511,8 @@ namespace SemesterProjekt1
                             var fightLogic = new FightLogic(user1, user2);
                             var battleResult = fightLogic.StartBattleAsync();
 
-                            // Update user ELO
                             UpdateELO(fightLogic, user1, user2);
 
-                            // Serialize response
                             string jsonResponse = SerializeToJson(battleResult);
 
                             CompleteBattleResponse(user1.Id, jsonResponse);
@@ -392,12 +540,12 @@ namespace SemesterProjekt1
             if (fightLogic.winner == user1.Username)
             {
                 user1.Inventory.ELO += 3;
-                user2.Inventory.ELO -= 5;
+                user2.Inventory.ELO = Math.Max(0, user2.Inventory.ELO - 5); // Verhindert negative ELO
             }
             else if (fightLogic.winner == user2.Username)
             {
                 user2.Inventory.ELO += 3;
-                user1.Inventory.ELO -= 5;
+                user1.Inventory.ELO = Math.Max(0, user1.Inventory.ELO - 5);
             }
 
             _userServiceHandler.UpdateUser(user1.Id, user1);
@@ -414,25 +562,47 @@ namespace SemesterProjekt1
 
         private async Task HandleGetUserByIdAsync(StreamReader request, StreamWriter response, string path)
         {
-            Console.WriteLine(path);
+            var authenticatedUser = await AuthenticateFromToken(request, response);
+            if (authenticatedUser == null)
+            {
+                SendErrorResponse(response, HttpStatusCode.Unauthorized, "Unauthorized");
+                return;
+            }
+
             string userIdString = path.Substring(6);
 
             if (int.TryParse(userIdString, out int userId))
             {
+                if (userId < 0 || userId > int.MaxValue)
+                {
+                    SendErrorResponse(response, HttpStatusCode.BadRequest, "Invalid user ID");
+                    return;
+                }
+
                 var user = _userServiceHandler.GetUserById(userId);
                 if (user != null)
                 {
-                    string jsonResponse = SerializeToJson(user);
+                    // Sanitize user data - entferne Passwort
+                    var sanitizedUser = new
+                    {
+                        user.Id,
+                        user.Username,
+                        user.Name,
+                        user.Bio,
+                        user.Image,
+                        ELO = user.Inventory?.ELO
+                    };
+                    string jsonResponse = SerializeToJson(sanitizedUser);
                     SendResponse(response, jsonResponse, "application/json");
                 }
                 else
                 {
-                    SendErrorResponse(response, HttpStatusCode.BadRequest);
+                    SendErrorResponse(response, HttpStatusCode.BadRequest, "User not found");
                 }
             }
             else
             {
-                SendErrorResponse(response, HttpStatusCode.BadRequest);
+                SendErrorResponse(response, HttpStatusCode.BadRequest, "Invalid user ID format");
             }
             await Task.CompletedTask;
         }
@@ -442,11 +612,19 @@ namespace SemesterProjekt1
             string requestBody = await ReadRequestBodyAsync(request, response);
 
             var user = DeserializeUser(requestBody);
-            if (user != null && (IsValidInput(user.Username) && IsValidInput(user.Password)))
+            if (user != null && (IsValidInput(user.Username) && IsValidPassword(user.Password)))
             {
+                if (user.Username.Length > MAX_USERNAME_LENGTH || user.Password.Length > MAX_PASSWORD_LENGTH)
+                {
+                    SendErrorResponse(response, HttpStatusCode.BadRequest, "Username or password too long");
+                    return;
+                }
+
                 var existingUser = _userServiceHandler.GetUserByName(user.Username);
                 if (existingUser == null)
                 {
+                    // WICHTIG: Hier sollte das Passwort gehasht werden vor dem Speichern
+                    // user.Password = HashPassword(user.Password);
                     _userServiceHandler.AddUser(user);
                     SendResponse(response, "User created successfully", "application/text", HttpStatusCode.Created);
                 }
@@ -463,17 +641,67 @@ namespace SemesterProjekt1
 
         private async Task HandleLoginAsync(StreamReader request, StreamWriter response)
         {
-            var user = await IsIdentiyYesUser(request, response);
-            if (user == null)
+            string requestBody = await ReadRequestBodyAsync(request, response);
+
+            // Extrahiere Credentials
+            string? username = null;
+            string? password = null;
+
+            if (IsJson(requestBody))
             {
-                user = await IsIdentiyYesUserCookie(request, response);
+                try
+                {
+                    var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true, MaxDepth = 32 };
+                    var loginData = JsonSerializer.Deserialize<User>(requestBody, options);
+                    if (loginData != null)
+                    {
+                        username = loginData.Username;
+                        password = loginData.Password;
+                    }
+                }
+                catch (JsonException)
+                {
+                    SendErrorResponse(response, HttpStatusCode.BadRequest, "Invalid JSON");
+                    return;
+                }
             }
+            else
+            {
+                var formData = requestBody.Split('&')
+                    .Select(part => part.Split('='))
+                    .Where(split => split.Length == 2)
+                    .ToDictionary(split => Uri.UnescapeDataString(split[0]), split => Uri.UnescapeDataString(split[1]));
+
+                username = formData.ContainsKey("username") ? formData["username"] : null;
+                password = formData.ContainsKey("password") ? formData["password"] : null;
+            }
+
+            if (string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(password))
+            {
+                SendErrorResponse(response, HttpStatusCode.BadRequest, "Missing credentials");
+                return;
+            }
+
+            // Rate Limiting Check
+            if (!CheckRateLimit(username))
+            {
+                SendErrorResponse(response, HttpStatusCode.TooManyRequests, "Too many login attempts. Please try again later.");
+                return;
+            }
+
+            var user = _userServiceHandler.AuthenticateUser(username, password);
 
             if (user != null)
             {
-                string token = $"{user.Username}-mtcgToken";
+                ResetLoginAttempts(username);
+
+                // Generiere sicheres Token
+                string token = GenerateSecureToken();
+                var expiry = DateTime.UtcNow.AddHours(TOKEN_EXPIRY_HOURS);
+                _activeTokens[token] = (user.Id, expiry);
+
                 var inventory = user.Inventory;
-                string responseContent = $"Login successful. Token: {token}";
+                string responseContent = "Login successful";
 
                 if (inventory != null)
                 {
@@ -482,16 +710,20 @@ namespace SemesterProjekt1
                 }
 
                 response.WriteLine("HTTP/1.1 200 OK");
-                response.WriteLine($"Set-Cookie: authToken={token}; Path=/;");
-                response.WriteLine($"Set-Cookie: userData=username={user.Username}&password={user.Password}&userid={user.Id};");
+                response.WriteLine($"Set-Cookie: authToken={token}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age={TOKEN_EXPIRY_HOURS * 3600}");
                 response.WriteLine("Content-Type: text/html");
                 response.WriteLine($"Content-Length: {responseContent.Length}");
+                response.WriteLine("X-Content-Type-Options: nosniff");
+                response.WriteLine("X-Frame-Options: DENY");
+                response.WriteLine("X-XSS-Protection: 1; mode=block");
+                response.WriteLine("Strict-Transport-Security: max-age=31536000; includeSubDomains");
                 response.WriteLine();
                 response.WriteLine(responseContent);
                 response.Flush();
             }
             else
             {
+                IncrementLoginAttempt(username);
                 SendErrorResponse(response, HttpStatusCode.Unauthorized, "Invalid username or password");
             }
         }
@@ -499,47 +731,103 @@ namespace SemesterProjekt1
         private async Task HandleLoginAsyncCURL(StreamReader reader, StreamWriter writer)
         {
             if (!writer.BaseStream.CanWrite)
-            { Console.WriteLine("Error"); }
+            {
+                Console.WriteLine("Error");
+                return;
+            }
 
-            //////////////////////////////////////////////
+            string requestBody = await ReadRequestBodyAsync(reader, writer);
+
+            string? username = null;
+            string? password = null;
+
+            if (IsJson(requestBody))
+            {
+                try
+                {
+                    var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true, MaxDepth = 32 };
+                    var user1 = JsonSerializer.Deserialize<User>(requestBody, options);
+                    if (user1 != null)
+                    {
+                        username = user1.Username;
+                        password = user1.Password;
+                    }
+                }
+                catch (JsonException)
+                {
+                    SendErrorResponse(writer, HttpStatusCode.BadRequest, "Invalid JSON");
+                    return;
+                }
+            }
+
+            if (string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(password))
+            {
+                SendErrorResponse(writer, HttpStatusCode.BadRequest, "Missing credentials");
+                return;
+            }
+
+            if (!CheckRateLimit(username))
+            {
+                SendErrorResponse(writer, HttpStatusCode.TooManyRequests, "Too many login attempts");
+                return;
+            }
+
             try
             {
-                var authenticatedUser = await IsIdentiyYesUser(reader, writer);
+                var authenticatedUser = _userServiceHandler.AuthenticateUser(username, password);
                 if (authenticatedUser != null)
                 {
-                    string token = $"{authenticatedUser.Username}-mtcgToken";
-                    string response = $"HTTP/1.1 200 OK\r\nSet-Cookie: authToken={token}\r\nContent-Type: text/html\r\nContent-Length: {token.Length}\r\n\r\n{token}";
+                    ResetLoginAttempts(username);
+
+                    string token = GenerateSecureToken();
+                    var expiry = DateTime.UtcNow.AddHours(TOKEN_EXPIRY_HOURS);
+                    _activeTokens[token] = (authenticatedUser.Id, expiry);
+
+                    string response = $"HTTP/1.1 200 OK\r\n" +
+                                    $"Set-Cookie: authToken={token}; HttpOnly; Secure; SameSite=Strict; Max-Age={TOKEN_EXPIRY_HOURS * 3600}\r\n" +
+                                    $"Content-Type: text/plain\r\n" +
+                                    $"Content-Length: {token.Length}\r\n" +
+                                    $"X-Content-Type-Options: nosniff\r\n" +
+                                    $"X-Frame-Options: DENY\r\n" +
+                                    $"Strict-Transport-Security: max-age=31536000; includeSubDomains\r\n" +
+                                    $"\r\n{token}";
                     byte[] responseBytes = Encoding.UTF8.GetBytes(response);
-                    Console.WriteLine("Yes");
                     await writer.BaseStream.WriteAsync(responseBytes, 0, responseBytes.Length);
                     await writer.BaseStream.FlushAsync();
-                    Console.WriteLine("Yes");
                 }
                 else
                 {
-                    SendErrorResponse(writer, HttpStatusCode.BadRequest);
+                    IncrementLoginAttempt(username);
+                    SendErrorResponse(writer, HttpStatusCode.Unauthorized, "Authentication failed");
                 }
             }
             catch (IOException ioEx)
             {
                 Console.WriteLine($"I/O error during login: {ioEx.Message}");
-                SendErrorResponse(writer, HttpStatusCode.InternalServerError);
+                SendErrorResponse(writer, HttpStatusCode.InternalServerError, "Internal server error");
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"Error during login: {ex.Message}");
-                SendErrorResponse(writer, HttpStatusCode.InternalServerError);
+                SendErrorResponse(writer, HttpStatusCode.InternalServerError, "Internal server error");
             }
         }
 
-        private async Task HandleLogout(StreamWriter writer)
+        private async Task HandleLogout(StreamReader reader, StreamWriter writer)
         {
             try
             {
+                // Token aus Request extrahieren und invalidieren
+                string token = await ExtractTokenFromRequest(reader);
+                if (!string.IsNullOrEmpty(token))
+                {
+                    _activeTokens.TryRemove(token, out _);
+                }
+
                 writer.WriteLine("HTTP/1.1 200 OK");
-                writer.WriteLine("Set-Cookie: userData=; Expires=Thu, 01 Jan 1970 00:00:00 GMT");
-                writer.WriteLine("Set-Cookie: authToken=; Expires=Thu, 01 Jan 1970 00:00:00 GMT");
+                writer.WriteLine("Set-Cookie: authToken=; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Path=/; HttpOnly; Secure; SameSite=Strict");
                 writer.WriteLine("Content-Type: text/plain");
+                writer.WriteLine("X-Content-Type-Options: nosniff");
                 writer.WriteLine();
                 writer.WriteLine("Logged out successfully.");
                 writer.Flush();
@@ -554,21 +842,58 @@ namespace SemesterProjekt1
             }
         }
 
+        private async Task<string> ExtractTokenFromRequest(StreamReader reader)
+        {
+            reader.BaseStream.Seek(0, SeekOrigin.Begin);
+            reader.DiscardBufferedData();
+
+            string? line;
+            string? token = null;
+
+            while ((line = await reader.ReadLineAsync()) != null && line != "")
+            {
+                if (line.StartsWith("Cookie:"))
+                {
+                    var cookies = line.Substring("Cookie:".Length).Trim().Split(';');
+                    foreach (var cookie in cookies)
+                    {
+                        var trimmedCookie = cookie.Trim();
+                        if (trimmedCookie.StartsWith("authToken="))
+                        {
+                            token = trimmedCookie.Substring("authToken=".Length);
+                            break;
+                        }
+                    }
+                }
+                else if (line.StartsWith("Authorization: Bearer "))
+                {
+                    token = line.Substring("Authorization: Bearer ".Length).Trim();
+                }
+            }
+
+            if (string.IsNullOrEmpty(token))
+            {
+                return string.Empty;
+            }
+
+            return token;
+        }
+
         private async Task HandleOpenCardPackAsync(StreamReader reader, StreamWriter writer)
         {
-            var userinfo = await IsIdentiyYesUserCookie(reader, writer);
+            var userinfo = await AuthenticateFromToken(reader, writer);
 
             if (userinfo != null)
             {
                 if (userinfo.Inventory.CardPacks.Count > 0)
                 {
-                    List<Card> Liste = new List<Card>();
-                    Liste = _userServiceHandler.OpenCardPack(userinfo.Id, userinfo.Username, userinfo.Password);
+                    List<Card> Liste = _userServiceHandler.OpenCardPack(userinfo.Id, userinfo.Username, userinfo.Password);
 
                     string jsonResponse = SerializeToJson(Liste);
                     writer.WriteLine("HTTP/1.1 200 OK");
                     writer.WriteLine("Content-Type: application/json");
                     writer.WriteLine($"Content-Length: {jsonResponse.Length}");
+                    writer.WriteLine("X-Content-Type-Options: nosniff");
                     writer.WriteLine();
                     writer.WriteLine(jsonResponse);
                     writer.Flush();
@@ -580,13 +905,13 @@ namespace SemesterProjekt1
             }
             else
             {
-                SendErrorResponse(writer, HttpStatusCode.Unauthorized, "Invalid at HandleOpenCard");
+                SendErrorResponse(writer, HttpStatusCode.Unauthorized, "Unauthorized");
             }
         }
 
         private async Task HandleBuyPacksAsync(StreamReader reader, StreamWriter writer)
         {
-            var user = await IsIdentiyYesUserCookie(reader, writer);
+            var user = await AuthenticateFromToken(reader, writer);
             string requestBodyString = await ReadRequestBodyAsync(reader, writer);
 
             if (user != null)
@@ -603,12 +928,21 @@ namespace SemesterProjekt1
                     }
                 }
 
+                if (amount <= 0 || amount > 100)
+                {
+                    SendErrorResponse(writer, HttpStatusCode.BadRequest, "Invalid amount. Must be between 1 and 100.");
+                    return;
+                }
+
                 if (amount > 0)
                 {
-                    try { _userServiceHandler.BuyPacks(user.Id, amount, user.Username, user.Password); }
-                    catch (InvalidOperationException ex)
+                    try
                     {
-                        SendErrorResponse(writer, HttpStatusCode.BadRequest, ex.Message);
+                        _userServiceHandler.BuyPacks(user.Id, amount, user.Username, user.Password);
+                    }
+                    catch (InvalidOperationException)
+                    {
+                        SendErrorResponse(writer, HttpStatusCode.BadRequest, "Unable to purchase packs");
                         return;
                     }
 
@@ -618,6 +952,7 @@ namespace SemesterProjekt1
                     writer.WriteLine("HTTP/1.1 200 OK");
                     writer.WriteLine("Content-Type: application/json");
                     writer.WriteLine($"Content-Length: {jsonResponse.Length}");
+                    writer.WriteLine("X-Content-Type-Options: nosniff");
                     writer.WriteLine();
                     writer.WriteLine(jsonResponse);
                     writer.Flush();
@@ -635,7 +970,7 @@ namespace SemesterProjekt1
 
         private async Task HandleBuyPacksCURLAsync(StreamReader reader, StreamWriter writer)
         {
-            var user = await IsIdentiyYesUserCookie(reader, writer);
+            var user = await AuthenticateFromToken(reader, writer);
 
             if (user != null)
             {
@@ -654,6 +989,7 @@ namespace SemesterProjekt1
                 writer.WriteLine("HTTP/1.1 200 OK");
                 writer.WriteLine("Content-Type: application/json");
                 writer.WriteLine($"Content-Length: {jsonResponse.Length}");
+                writer.WriteLine("X-Content-Type-Options: nosniff");
                 writer.WriteLine();
                 writer.WriteLine(jsonResponse);
                 writer.Flush();
@@ -668,7 +1004,7 @@ namespace SemesterProjekt1
         {
             try
             {
-                var user = await IsIdentiyYesUserCookie(reader, writer);
+                var user = await AuthenticateFromToken(reader, writer);
                 string requestBodyString = await ReadRequestBodyAsync(reader, writer);
 
                 if (user != null)
@@ -681,11 +1017,20 @@ namespace SemesterProjekt1
                         string[] keyValue = param.Split('=');
                         if (keyValue[0] == "cardIndices" && int.TryParse(keyValue[1], out int index))
                         {
-                            cardIndices.Add(index);
+                            if (index >= 0 && index < user.Inventory.OwnedCards.Count)
+                            {
+                                cardIndices.Add(index);
+                            }
                         }
                     }
 
-                    if (cardIndices != null)
+                    if (cardIndices.Count > 20)
+                    {
+                        SendErrorResponse(writer, HttpStatusCode.BadRequest, "Too many cards selected");
+                        return;
+                    }
+
+                    if (cardIndices != null && cardIndices.Count > 0)
                     {
                         int[] cardPositions = cardIndices.Select(index => index).ToArray();
                         _userServiceHandler.AddCardToDeckHTTPVersion(user.Id, user.Username, user.Password, cardPositions);
@@ -703,7 +1048,8 @@ namespace SemesterProjekt1
             }
             catch (Exception ex)
             {
-                SendErrorResponse(writer, HttpStatusCode.InternalServerError, ex.Message);
+                Console.WriteLine($"Error in HandleAddCardToDeckAsync: {ex.Message}");
+                SendErrorResponse(writer, HttpStatusCode.InternalServerError, "Internal server error");
             }
         }
 
@@ -712,55 +1058,91 @@ namespace SemesterProjekt1
             writer.WriteLine($"HTTP/1.1 {(int)statusCode} {statusCode}");
             writer.WriteLine("Content-Type: " + contentType);
             writer.WriteLine("Content-Length: " + content.Length);
+            writer.WriteLine("X-Content-Type-Options: nosniff");
+            writer.WriteLine("X-Frame-Options: DENY");
+            writer.WriteLine("X-XSS-Protection: 1; mode=block");
+            writer.WriteLine("Strict-Transport-Security: max-age=31536000; includeSubDomains");
+            writer.WriteLine("Content-Security-Policy: default-src 'self'");
             writer.WriteLine();
             writer.Write(content);
             writer.Flush();
         }
 
-        private void SendResponseWeb(StreamWriter writer, string content, string contentType, HttpStatusCode statusCode = HttpStatusCode.OK)
-        {
-            writer.Write(content);
-            writer.Flush(); // Ensure the content is flushed to the stream
-        }
-
         private User DeserializeUser(string json)
         {
-            var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+            var options = new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true,
+                MaxDepth = 32
+            };
             return JsonSerializer.Deserialize<User>(json, options);
         }
 
         private string SerializeToJson(object obj)
         {
-            return JsonSerializer.Serialize(obj);
+            var options = new JsonSerializerOptions
+            {
+                Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+                MaxDepth = 32
+            };
+            return JsonSerializer.Serialize(obj, options);
         }
 
         private bool IsValidInput(string input)
         {
-            string[] blackList = { "'", "\"", "--", ";", "/*", "*/", "xp_" };
+            if (string.IsNullOrWhiteSpace(input))
+                return false;
+
+            // SQL Injection Schutz
+            string[] blackList = { "'", "\"", "--", ";", "/*", "*/", "xp_", "exec", "execute", "script", "<", ">", "drop", "insert", "delete", "update", "union", "select" };
             foreach (var item in blackList)
             {
-                if (input.Contains(item))
+                if (input.ToLower().Contains(item.ToLower()))
                 {
                     return false;
                 }
             }
 
-            if (input.Length > 20)
+            if (input.Length > MAX_USERNAME_LENGTH)
             {
                 return false;
             }
 
-            return true;
+            // Nur alphanumerische Zeichen, Unterstriche und Bindestriche erlauben
+            return Regex.IsMatch(input, @"^[a-zA-Z0-9_-]+$");
+        }
+
+        private bool IsValidPassword(string password)
+        {
+            if (string.IsNullOrWhiteSpace(password))
+                return false;
+
+            // Mindestlänge für Passwort
+            if (password.Length < 8)
+                return false;
+
+            if (password.Length > MAX_PASSWORD_LENGTH)
+                return false;
+
+            // Passwort sollte mindestens einen Buchstaben und eine Zahl enthalten
+            bool hasLetter = password.Any(char.IsLetter);
+            bool hasDigit = password.Any(char.IsDigit);
+
+            return hasLetter && hasDigit;
         }
 
         private bool IsJson(string input)
         {
+            if (string.IsNullOrWhiteSpace(input))
+                return false;
+
             input = input.Trim();
-            Console.WriteLine(input);
-            return input.StartsWith("{") && input.EndsWith("}") || input.StartsWith("[") && input.EndsWith("]");
+            return (input.StartsWith("{") && input.EndsWith("}")) ||
+                   (input.StartsWith("[") && input.EndsWith("]"));
         }
 
-        private async Task<User?> IsIdentiyYesUser(StreamReader reader, StreamWriter writer)
+        // Neue Methode: Token-basierte Authentifizierung
+        private async Task<User?> AuthenticateFromToken(StreamReader reader, StreamWriter writer)
         {
             if (!writer.BaseStream.CanWrite)
             {
@@ -768,120 +1150,44 @@ namespace SemesterProjekt1
                 return null;
             }
 
-            string requestBodyString = await ReadRequestBodyAsync(reader, writer);
+            reader.BaseStream.Seek(0, SeekOrigin.Begin);
+            reader.DiscardBufferedData();
 
-            string? username = null;
-            string? password = null;
+            string? line;
+            string? token = null;
 
-            if (IsJson(requestBodyString))
+            while ((line = await reader.ReadLineAsync()) != null && line != "")
             {
-                try
+                if (line.StartsWith("Cookie:"))
                 {
-                    var user1 = JsonSerializer.Deserialize<User>(requestBodyString);
-                    if (user1 != null)
+                    var cookies = line.Substring("Cookie:".Length).Trim().Split(';');
+                    foreach (var cookie in cookies)
                     {
-                        username = user1.Username;
-                        password = user1.Password;
-                        Console.WriteLine($"Deserialized User - Username: {username}, Password: {password}");
-                    }
-                    else
-                    {
-                        Console.WriteLine("Deserialized user is null.");
-                    }
-                }
-                catch (JsonException jsonEx)
-                {
-                    Console.WriteLine($"JSON deserialization error: {jsonEx.Message}");
-                    SendErrorResponse(writer, HttpStatusCode.BadRequest);
-                    return null;
-                }
-            }
-            else
-            {
-                var formData = requestBodyString.Split('&')
-                    .Select(part => part.Split('='))
-                    .ToDictionary(split => split[0], split => split.Length > 1 ? split[1] : string.Empty);
-                username = formData.ContainsKey("username") ? formData["username"] : null;
-                password = formData.ContainsKey("password") ? formData["password"] : null;
-            }
-
-            if (username == null || password == null)
-            {
-                SendErrorResponse(writer, HttpStatusCode.BadRequest);
-                return null;
-            }
-
-            var authenticatedUser = _userServiceHandler.AuthenticateUser(username, password);
-
-            if (authenticatedUser != null)
-                return authenticatedUser;
-            else
-            {
-                SendErrorResponse(writer, HttpStatusCode.BadRequest);
-                return null;
-            }
-        }
-
-        private async Task<User?> IsIdentiyYesUserCookie(StreamReader reader, StreamWriter writer)
-        {
-            if (!writer.BaseStream.CanWrite)
-            {
-                Console.WriteLine("Error");
-                return null;
-            }
-
-            string requestBodyString = await ReadRequestBodyCookieAsync(reader, writer);
-
-            string? username = null;
-            string? password = null;
-
-            if (IsJson(requestBodyString))
-            {
-                try
-                {
-                    var user1 = JsonSerializer.Deserialize<User>(requestBodyString);
-                    if (user1 != null)
-                    {
-                        username = user1.Username;
-                        password = user1.Password;
-                        Console.WriteLine($"Deserialized User - Username: {username}, Password: {password}");
-                    }
-                    else
-                    {
-                        Console.WriteLine("Deserialized user is null.");
+                        var trimmedCookie = cookie.Trim();
+                        if (trimmedCookie.StartsWith("authToken="))
+                        {
+                            token = trimmedCookie.Substring("authToken=".Length);
+                            break;
+                        }
                     }
                 }
-                catch (JsonException jsonEx)
-                {
-                    Console.WriteLine($"JSON deserialization error: {jsonEx.Message}");
-                    SendErrorResponse(writer, HttpStatusCode.BadRequest);
-                    return null;
-                }
-            }
-            else
-            {
-                var formData = requestBodyString.Split('&')
-                    .Select(part => part.Split('='))
-                    .ToDictionary(split => split[0], split => split.Length > 1 ? split[1] : string.Empty);
-                username = formData.ContainsKey("username") ? formData["username"] : null;
-                password = formData.ContainsKey("password") ? formData["password"] : null;
             }
 
-            if (username == null || password == null)
+            reader.BaseStream.Seek(0, SeekOrigin.Begin);
+            reader.DiscardBufferedData();
+
+            if (string.IsNullOrEmpty(token))
             {
-                SendErrorResponse(writer, HttpStatusCode.BadRequest);
                 return null;
             }
 
-            var authenticatedUser = _userServiceHandler.AuthenticateUser(username, password);
-
-            if (authenticatedUser != null)
-                return authenticatedUser;
-            else
+            int? userId = ValidateToken(token);
+            if (userId.HasValue)
             {
-                SendErrorResponse(writer, HttpStatusCode.BadRequest);
-                return null;
+                return _userServiceHandler.GetUserById(userId.Value);
             }
+
+            return null;
         }
 
         private async Task<string> ReadRequestBodyAsync(StreamReader reader, StreamWriter writer)
@@ -890,31 +1196,30 @@ namespace SemesterProjekt1
             if (requestLine == null)
             {
                 Console.WriteLine("No request line received.");
-                SendErrorResponse(writer, HttpStatusCode.BadRequest);
+                SendErrorResponse(writer, HttpStatusCode.BadRequest, "Invalid request");
                 return string.Empty;
             }
-
-            Console.WriteLine($"Request line: {requestLine}");
 
             int contentLength = 0;
             string? line;
             while ((line = await reader.ReadLineAsync()) != null && line != "")
             {
-                Console.WriteLine($"Header: {line}");
                 if (line.StartsWith("Content-Length:"))
                 {
                     var parts = line.Split(':');
                     if (parts.Length > 1 && int.TryParse(parts[1].Trim(), out contentLength))
                     {
-                        Console.WriteLine($"Content-Length: {contentLength}");
+                        if (contentLength > MAX_REQUEST_SIZE)
+                        {
+                            SendErrorResponse(writer, HttpStatusCode.BadRequest, "Request too large");
+                            return string.Empty;
+                        }
                     }
                 }
             }
 
             if (contentLength <= 0)
             {
-                Console.WriteLine("Content-Length is invalid or missing.");
-                SendErrorResponse(writer, HttpStatusCode.BadRequest);
                 return string.Empty;
             }
 
@@ -941,81 +1246,19 @@ namespace SemesterProjekt1
             return requestBodyString;
         }
 
-        private async Task<string> ReadRequestBodyCookieAsync(StreamReader reader, StreamWriter writer)
-        {
-            string requestLine = await reader.ReadLineAsync();
-            if (requestLine == null)
-            {
-                Console.WriteLine("No request line received.");
-                SendErrorResponse(writer, HttpStatusCode.BadRequest);
-                return string.Empty;
-            }
-            Console.BackgroundColor = ConsoleColor.Red;
-            Console.WriteLine($"Request line: {requestLine}");
-
-            string? line;
-            string? userDataCookie = null;
-            while ((line = await reader.ReadLineAsync()) != null && line != "")
-            {
-                if (line.StartsWith("Cookie:"))
-                {
-                    Console.WriteLine($"Request line: {line}");
-                    var cookies = line.Substring("Cookie:".Length).Trim().Split(';');
-
-                    foreach (var cookie in cookies)
-                    {
-                        var trimmedCookie = cookie.Trim();
-
-                        if (trimmedCookie.StartsWith("userData="))
-                        {
-                            userDataCookie = trimmedCookie.Substring("userData=".Length);
-                            break;
-                        }
-                    }
-                }
-                else if (line.StartsWith("Authorization: Bearer"))
-                {
-                    var parts = line.Split(' ');
-                    if (parts.Length == 3)
-                    {
-                        var tokenParts = parts[2].Split('-');
-                        if (tokenParts.Length == 2 && tokenParts[1] == "mtcgToken")
-                        {
-                            string username = tokenParts[0];
-                            Console.WriteLine($"Extracted Username: {username}");
-                            var user1 = _userServiceHandler.GetUserByName(username);
-                            userDataCookie = $"{{\"Username\":\"{user1.Username}\",\"Password\":\"{user1.Password}\"}}";
-                        }
-                    }
-                }
-            }
-
-            if (userDataCookie == null)
-            {
-                Console.WriteLine("userData cookie not found.");
-                SendErrorResponse(writer, HttpStatusCode.BadRequest);
-                return string.Empty;
-            }
-
-            Console.WriteLine($"userData cookie: {userDataCookie}");
-
-            // Reset the reader to start of stream workarround to get it back
-            reader.BaseStream.Seek(0, SeekOrigin.Begin);
-            reader.DiscardBufferedData();
-            Console.ResetColor();
-            return userDataCookie;
-        }
-
         private void SendErrorResponse(StreamWriter writer, HttpStatusCode statusCode)
         {
-            writer.WriteLine($"HTTP/1.1  {statusCode}");
+            writer.WriteLine($"HTTP/1.1 {(int)statusCode} {statusCode}");
             writer.WriteLine("Content-Length: 0");
+            writer.WriteLine("X-Content-Type-Options: nosniff");
+            writer.WriteLine("X-Frame-Options: DENY");
+            writer.WriteLine();
             writer.Flush();
         }
 
         private async Task HandleAddTradingDealAsync(StreamReader request, StreamWriter response)
         {
-            var user = await IsIdentiyYesUserCookie(request, response);
+            var user = await AuthenticateFromToken(request, response);
             if (user != null)
             {
                 string requestBody = await ReadRequestBodyAsync(request, response);
@@ -1024,6 +1267,7 @@ namespace SemesterProjekt1
                     var options = new JsonSerializerOptions
                     {
                         PropertyNameCaseInsensitive = true,
+                        MaxDepth = 32,
                         Converters = { new TradingLogicJsonConverter() }
                     };
 
@@ -1031,11 +1275,15 @@ namespace SemesterProjekt1
                     if (deal != null)
                     {
                         deal.UserId = user.Id;
-                        try { _userServiceHandler.AddTradingDeal(deal, user); }
+                        try
+                        {
+                            _userServiceHandler.AddTradingDeal(deal, user);
+                        }
                         catch (Exception ex)
                         {
                             Console.WriteLine($"Unexpected error: {ex.Message}");
-                            SendErrorResponse(response, HttpStatusCode.InternalServerError, $"Unexpected error: {ex.Message}");
+                            SendErrorResponse(response, HttpStatusCode.InternalServerError, "Unable to create trading deal");
+                            return;
                         }
 
                         SendResponse(response, "Trading deal created successfully", "application/text", HttpStatusCode.Created);
@@ -1048,12 +1296,12 @@ namespace SemesterProjekt1
                 catch (JsonException ex)
                 {
                     Console.WriteLine($"JSON deserialization error: {ex.Message}");
-                    SendErrorResponse(response, HttpStatusCode.BadRequest, $"Invalid JSON format: {ex.Message}");
+                    SendErrorResponse(response, HttpStatusCode.BadRequest, "Invalid JSON format");
                 }
                 catch (Exception ex)
                 {
                     Console.WriteLine($"Unexpected error: {ex.Message}");
-                    SendErrorResponse(response, HttpStatusCode.InternalServerError, $"Unexpected error: {ex.Message}");
+                    SendErrorResponse(response, HttpStatusCode.InternalServerError, "Internal server error");
                 }
             }
             else
@@ -1064,19 +1312,34 @@ namespace SemesterProjekt1
 
         private async Task HandleExecuteTradeAsync(StreamReader request, StreamWriter response, string path)
         {
-            var user = await IsIdentiyYesUserCookie(request, response);
+            var user = await AuthenticateFromToken(request, response);
             if (user != null)
             {
                 string dealIdString = path.Substring(10);
                 if (Guid.TryParse(dealIdString, out Guid dealId))
                 {
                     string requestBody = await ReadRequestBodyAsync(request, response);
+
+                    if (string.IsNullOrWhiteSpace(requestBody))
+                    {
+                        SendErrorResponse(response, HttpStatusCode.BadRequest, "Missing card ID");
+                        return;
+                    }
+
                     if (Guid.TryParse(requestBody.Trim('"'), out Guid cardId))
                     {
                         if (user.Inventory.OwnedCards.Any(c => c.ID == cardId))
                         {
-                            _userServiceHandler.ExecuteTrade(dealId, cardId, user.Id);
-                            SendResponse(response, "Trade executed successfully", "application/text", HttpStatusCode.OK);
+                            try
+                            {
+                                _userServiceHandler.ExecuteTrade(dealId, cardId, user.Id);
+                                SendResponse(response, "Trade executed successfully", "application/text", HttpStatusCode.OK);
+                            }
+                            catch (Exception ex)
+                            {
+                                Console.WriteLine($"Trade execution error: {ex.Message}");
+                                SendErrorResponse(response, HttpStatusCode.InternalServerError, "Unable to execute trade");
+                            }
                         }
                         else
                         {
@@ -1101,7 +1364,7 @@ namespace SemesterProjekt1
 
         private async Task HandleDeleteTradingDealAsync(StreamReader request, StreamWriter response, string path)
         {
-            var user = await IsIdentiyYesUserCookie(request, response);
+            var user = await AuthenticateFromToken(request, response);
             if (user != null)
             {
                 string dealIdString = path.Substring(10);
@@ -1131,15 +1394,28 @@ namespace SemesterProjekt1
 
         private async Task HandleAddPackagesAsync(StreamReader request, StreamWriter response)
         {
-            var user = await IsIdentiyYesUserCookie(request, response);
+            var user = await AuthenticateFromToken(request, response);
             if (user != null && user.Username == "admin")
             {
                 string requestBody = await ReadRequestBodyAsync(request, response);
                 try
                 {
-                    var cardDataList = JsonSerializer.Deserialize<List<CardData>>(requestBody);
+                    var options = new JsonSerializerOptions
+                    {
+                        PropertyNameCaseInsensitive = true,
+                        MaxDepth = 32
+                    };
+
+                    var cardDataList = JsonSerializer.Deserialize<List<CardData>>(requestBody, options);
                     if (cardDataList != null)
                     {
+                        // Limitiere Anzahl der Karten pro Request
+                        if (cardDataList.Count > 100)
+                        {
+                            SendErrorResponse(response, HttpStatusCode.BadRequest, "Too many cards in request");
+                            return;
+                        }
+
                         var cards = cardDataList.Select(data =>
                         {
                             return CardCreator9000.CreateCard(data);
@@ -1155,12 +1431,12 @@ namespace SemesterProjekt1
                 catch (JsonException ex)
                 {
                     Console.WriteLine($"JSON deserialization error: {ex.Message}");
-                    SendErrorResponse(response, HttpStatusCode.BadRequest, $"Invalid JSON format: {ex.Message}");
+                    SendErrorResponse(response, HttpStatusCode.BadRequest, "Invalid JSON format");
                 }
                 catch (Exception ex)
                 {
                     Console.WriteLine($"Unexpected error: {ex.Message}");
-                    SendErrorResponse(response, HttpStatusCode.InternalServerError, $"Unexpected error: {ex.Message}");
+                    SendErrorResponse(response, HttpStatusCode.InternalServerError, "Internal server error");
                 }
             }
             else
@@ -1171,21 +1447,23 @@ namespace SemesterProjekt1
 
         private async Task HandleGetUserByUsernameAsync(StreamReader request, StreamWriter response, string path)
         {
-            string username = path.Substring(7);
+            string username = Uri.UnescapeDataString(path.Substring(7));
 
-            var user = await IsIdentiyYesUserCookie(request, response);
+            var user = await AuthenticateFromToken(request, response);
 
-            if (user.Username == username)
+            if (user != null && user.Username == username)
             {
-                if (user != null)
+                var sanitizedUser = new
                 {
-                    string jsonResponse = SerializeToJson(user);
-                    SendResponse(response, jsonResponse, "application/json");
-                }
-                else
-                {
-                    SendErrorResponse(response, HttpStatusCode.BadRequest, "User not found");
-                }
+                    user.Id,
+                    user.Username,
+                    user.Name,
+                    user.Bio,
+                    user.Image,
+                    ELO = user.Inventory?.ELO
+                };
+                string jsonResponse = SerializeToJson(sanitizedUser);
+                SendResponse(response, jsonResponse, "application/json");
             }
             else
             {
@@ -1195,10 +1473,10 @@ namespace SemesterProjekt1
 
         private async Task HandleUpdateUserAsync(StreamReader request, StreamWriter response, string path)
         {
-            var user = await IsIdentiyYesUserCookie(request, response);
+            var user = await AuthenticateFromToken(request, response);
             if (user != null)
             {
-                string username = path.Substring(7);
+                string username = Uri.UnescapeDataString(path.Substring(7));
                 if (user.Username == username)
                 {
                     string requestBody = await ReadRequestBodyAsync(request, response);
@@ -1210,26 +1488,38 @@ namespace SemesterProjekt1
 
                             if (root.TryGetProperty("Name", out JsonElement nameElement))
                             {
-                                user.Name = nameElement.GetString();
+                                string name = nameElement.GetString();
+                                if (!string.IsNullOrWhiteSpace(name) && name.Length <= 50)
+                                {
+                                    user.Name = name;
+                                }
                             }
 
                             if (root.TryGetProperty("Bio", out JsonElement bioElement))
                             {
-                                user.Bio = bioElement.GetString();
+                                string bio = bioElement.GetString();
+                                if (bio != null && bio.Length <= 500)
+                                {
+                                    user.Bio = bio;
+                                }
                             }
 
                             if (root.TryGetProperty("Image", out JsonElement imageElement))
                             {
-                                user.Image = imageElement.GetString();
+                                string image = imageElement.GetString();
+                                if (image != null && image.Length <= 200)
+                                {
+                                    user.Image = image;
+                                }
                             }
                         }
 
                         _userServiceHandler.UpdateUser(user.Id, user);
                         SendResponse(response, "User updated successfully", "application/json", HttpStatusCode.OK);
                     }
-                    catch (JsonException ex)
+                    catch (JsonException)
                     {
-                        SendErrorResponse(response, HttpStatusCode.BadRequest, $"Invalid JSON format: {ex.Message}");
+                        SendErrorResponse(response, HttpStatusCode.BadRequest, "Invalid JSON format");
                     }
                 }
                 else
@@ -1247,6 +1537,16 @@ namespace SemesterProjekt1
         {
             try
             {
+                string[] allowedMethods = { "GET", "POST", "PUT", "DELETE" };
+                if (!allowedMethods.Contains(method.ToUpper()))
+                {
+                    response.WriteLine("HTTP/1.1 405 Method Not Allowed");
+                    response.WriteLine("Content-Length: 0");
+                    response.WriteLine();
+                    response.Flush();
+                    return;
+                }
+
                 switch (method)
                 {
                     case "GET":
@@ -1276,6 +1576,7 @@ namespace SemesterProjekt1
             catch (Exception ex)
             {
                 Console.WriteLine($"Error handling request: {ex.Message}");
+                SendErrorResponse(response, HttpStatusCode.InternalServerError, "Internal server error");
             }
         }
     }
