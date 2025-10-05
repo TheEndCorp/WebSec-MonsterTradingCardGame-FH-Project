@@ -58,7 +58,7 @@ namespace SemesterProjekt1
                 }
             }
 
-            if (input.Length > 50)
+            if (input.Length > 500)
             {
                 return false;
             }
