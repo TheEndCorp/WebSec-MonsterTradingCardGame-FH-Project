@@ -289,6 +289,42 @@ namespace SemesterProjekt1
                         await HandleGetRequestForProfile(request, response);
                         break;
                     }
+                case "/inventory":
+                    {
+                        var user = await AuthenticateFromToken(request, response);
+                        if (user == null)
+                        {
+                            // Redirect zu Login wenn nicht authentifiziert
+                            response.WriteLine("HTTP/1.1 302 Found");
+                            response.WriteLine("Location: /login");
+                            response.WriteLine("Content-Length: 0");
+                            response.WriteLine();
+                            response.Flush();
+                            return;
+                        }
+
+                        var inventory = user.Inventory;
+                        var (inventoryHtml, nonce) = _htmlgen.GenerateInventoryHtml(inventory);
+
+                        string csp = nonce != null
+                            ? $"default-src 'self'; style-src 'self' 'nonce-{nonce}'; script-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'self'"
+                            : "default-src 'self'; style-src 'self'; script-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'self'";
+
+                        response.WriteLine("HTTP/1.1 200 OK");
+                        response.WriteLine("Content-Type: text/html");
+                        response.WriteLine($"Content-Length: {inventoryHtml.Length}");
+                        response.WriteLine("X-Content-Type-Options: nosniff");
+                        response.WriteLine("X-Frame-Options: DENY");
+                        response.WriteLine("X-XSS-Protection: 1; mode=block");
+                        response.WriteLine($"Content-Security-Policy: {csp}");
+                        response.WriteLine("Strict-Transport-Security: max-age=31536000; includeSubDomains; preload");
+                        response.WriteLine("Referrer-Policy: strict-origin-when-cross-origin");
+                        response.WriteLine("Permissions-Policy: geolocation=(), microphone=(), camera=()");
+                        response.WriteLine();
+                        response.WriteLine(inventoryHtml);
+                        response.Flush();
+                        break;
+                    }
                 default:
                     {
                         response.WriteLine("HTTP/1.1 404 Not Found");
@@ -709,28 +745,18 @@ namespace SemesterProjekt1
                 var expiry = DateTime.UtcNow.AddHours(TOKEN_EXPIRY_HOURS);
                 _activeTokens[token] = (user.Id, expiry);
 
-                var inventory = user.Inventory;
-
-                var (inventoryHtml, nonce) = _htmlgen.GenerateInventoryHtml(inventory);
-                string responseContent = inventoryHtml;
-
-                string csp = nonce != null
-                    ? $"default-src 'self'; style-src 'self' 'nonce-{nonce}'; script-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'self'"
-                    : "default-src 'self'; style-src 'self'; script-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'self'";
-
-                response.WriteLine("HTTP/1.1 200 OK");
+                // HTTP 302 Redirect zu /inventory
+                response.WriteLine("HTTP/1.1 302 Found");
+                response.WriteLine("Location: /inventory");
                 response.WriteLine($"Set-Cookie: authToken={token}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age={TOKEN_EXPIRY_HOURS * 3600}");
-                response.WriteLine("Content-Type: text/html");
-                response.WriteLine($"Content-Length: {responseContent.Length}");
+                response.WriteLine("Content-Length: 0");
                 response.WriteLine("X-Content-Type-Options: nosniff");
                 response.WriteLine("X-Frame-Options: DENY");
                 response.WriteLine("X-XSS-Protection: 1; mode=block");
-                response.WriteLine($"Content-Security-Policy: {csp}");
                 response.WriteLine("Strict-Transport-Security: max-age=31536000; includeSubDomains; preload");
                 response.WriteLine("Referrer-Policy: strict-origin-when-cross-origin");
                 response.WriteLine("Permissions-Policy: geolocation=(), microphone=(), camera=()");
                 response.WriteLine();
-                response.WriteLine(responseContent);
                 response.Flush();
             }
             else
