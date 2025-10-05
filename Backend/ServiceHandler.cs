@@ -175,10 +175,24 @@ namespace SemesterProjekt1
             var user = _users.Find(u => u.Username == username);
             if (user != null)
             {
-                // Verifiziere das Passwort mit dem Hash aus der DB
-                if (PasswordHasher.VerifyPassword(password, user.Password))
+                // Prüfe ob das übergebene Passwort bereits gehasht ist (enthält "." als Hash-Trennzeichen)
+                bool isPasswordHashed = password.Contains(".") && password.Split('.').Length == 2;
+
+                if (isPasswordHashed)
                 {
-                    return user;
+                    // Passwort ist bereits gehasht - direkter Vergleich mit gespeichertem Hash
+                    if (user.Password == password)
+                    {
+                        return user;
+                    }
+                }
+                else
+                {
+                    // Passwort ist Klartext - normale Verifizierung mit Hash aus der DB
+                    if (PasswordHasher.VerifyPassword(password, user.Password))
+                    {
+                        return user;
+                    }
                 }
             }
             return null;
