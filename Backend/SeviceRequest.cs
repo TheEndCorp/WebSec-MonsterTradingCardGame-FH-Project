@@ -284,6 +284,11 @@ namespace SemesterProjekt1
                         }
                         break;
                     }
+                case "/profile":
+                    {
+                        await HandleGetRequestForProfile(request, response);
+                        break;
+                    }
                 default:
                     {
                         response.WriteLine("HTTP/1.1 404 Not Found");
@@ -347,6 +352,10 @@ namespace SemesterProjekt1
 
                 case "/packages":
                     await HandleAddPackagesAsync(request, response);
+                    break;
+
+                case string path when path.StartsWith("/users/"):
+                    await HandleUpdateUserAsync(request, response, path);
                     break;
 
                 default:
@@ -701,13 +710,13 @@ namespace SemesterProjekt1
                 _activeTokens[token] = (user.Id, expiry);
 
                 var inventory = user.Inventory;
-                string responseContent = "Login successful";
 
-                if (inventory != null)
-                {
-                    string inventoryHtml = _htmlgen.GenerateInventoryHtml(inventory);
-                    responseContent += "\n" + inventoryHtml;
-                }
+                var (inventoryHtml, nonce) = _htmlgen.GenerateInventoryHtml(inventory);
+                string responseContent = inventoryHtml;
+
+                string csp = nonce != null
+                    ? $"default-src 'self'; style-src 'self' 'nonce-{nonce}'; script-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'self'"
+                    : "default-src 'self'; style-src 'self'; script-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'self'";
 
                 response.WriteLine("HTTP/1.1 200 OK");
                 response.WriteLine($"Set-Cookie: authToken={token}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age={TOKEN_EXPIRY_HOURS * 3600}");
@@ -716,7 +725,10 @@ namespace SemesterProjekt1
                 response.WriteLine("X-Content-Type-Options: nosniff");
                 response.WriteLine("X-Frame-Options: DENY");
                 response.WriteLine("X-XSS-Protection: 1; mode=block");
-                response.WriteLine("Strict-Transport-Security: max-age=31536000; includeSubDomains");
+                response.WriteLine($"Content-Security-Policy: {csp}");
+                response.WriteLine("Strict-Transport-Security: max-age=31536000; includeSubDomains; preload");
+                response.WriteLine("Referrer-Policy: strict-origin-when-cross-origin");
+                response.WriteLine("Permissions-Policy: geolocation=(), microphone=(), camera=()");
                 response.WriteLine();
                 response.WriteLine(responseContent);
                 response.Flush();
@@ -1055,14 +1067,18 @@ namespace SemesterProjekt1
 
         private void SendResponse(StreamWriter writer, string content, string contentType, HttpStatusCode statusCode = HttpStatusCode.OK)
         {
+            string csp = "default-src 'self'; style-src 'self'; script-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'self'";
+
             writer.WriteLine($"HTTP/1.1 {(int)statusCode} {statusCode}");
             writer.WriteLine("Content-Type: " + contentType);
             writer.WriteLine("Content-Length: " + content.Length);
             writer.WriteLine("X-Content-Type-Options: nosniff");
             writer.WriteLine("X-Frame-Options: DENY");
             writer.WriteLine("X-XSS-Protection: 1; mode=block");
-            writer.WriteLine("Strict-Transport-Security: max-age=31536000; includeSubDomains");
-            writer.WriteLine("Content-Security-Policy: default-src 'self'");
+            writer.WriteLine($"Content-Security-Policy: {csp}");
+            writer.WriteLine("Strict-Transport-Security: max-age=31536000; includeSubDomains; preload");
+            writer.WriteLine("Referrer-Policy: strict-origin-when-cross-origin");
+            writer.WriteLine("Permissions-Policy: geolocation=(), microphone=(), camera=()");
             writer.WriteLine();
             writer.Write(content);
             writer.Flush();
@@ -1531,6 +1547,23 @@ namespace SemesterProjekt1
             {
                 SendErrorResponse(response, HttpStatusCode.Unauthorized, "Invalid user");
             }
+        }
+
+        private async Task<string> HandleGetRequestForProfile(StreamReader request, StreamWriter response)
+        {
+            var user = await AuthenticateFromToken(request, response);
+            if (user == null)
+            {
+                SendErrorResponse(response, HttpStatusCode.Unauthorized, "Unauthorized");
+                return null;
+            }
+
+            var (html, nonce) = _htmlgen.GenerateProfilePage(user);
+            if (!string.IsNullOrEmpty(html))
+            {
+                _htmlgen.SendResponse(response, html, "text/html", nonce);
+            }
+            return nonce;
         }
 
         public async Task HandleRequestAsync(StreamReader request, StreamWriter response, string method, string path)
