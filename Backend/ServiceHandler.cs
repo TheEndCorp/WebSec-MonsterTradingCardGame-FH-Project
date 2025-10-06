@@ -101,7 +101,6 @@ namespace SemesterProjekt1
             }
 
             // Hash das Passwort VOR dem Speichern in der DB
-            user.Password = PasswordHasher.HashPassword(user.Password);
             user.GetNextAvailableId(_users);
             _users.Add(user);
             _databaseHandler.SaveUsers(_users);

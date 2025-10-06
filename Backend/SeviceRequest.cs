@@ -6,6 +6,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using SemesterProjekt1.Security;
 
 namespace SemesterProjekt1
 {
@@ -217,6 +218,13 @@ namespace SemesterProjekt1
                         _htmlgen.SendLoginPage(response);
                         break;
                     }
+
+                case "/register":
+                    {
+                        _htmlgen.SendRegisterPage(response);
+                        break;
+                    }
+
                 case "/scoreboard":
                     {
                         var allUsers = _userServiceHandler.GetAllUsers();
@@ -656,31 +664,96 @@ namespace SemesterProjekt1
         {
             string requestBody = await ReadRequestBodyAsync(request, response);
 
-            var user = DeserializeUser(requestBody);
-            if (user != null && (IsValidInput(user.Username) && IsValidPassword(user.Password)))
-            {
-                if (user.Username.Length > MAX_USERNAME_LENGTH || user.Password.Length > MAX_PASSWORD_LENGTH)
-                {
-                    SendErrorResponse(response, HttpStatusCode.BadRequest, "Username or password too long");
-                    return;
-                }
+            // Parse form data oder JSON
+            string? username = null;
+            string? password = null;
 
-                var existingUser = _userServiceHandler.GetUserByName(user.Username);
-                if (existingUser == null)
+            if (IsJson(requestBody))
+            {
+                try
                 {
-                    // WICHTIG: Hier sollte das Passwort gehasht werden vor dem Speichern
-                    // user.Password = HashPassword(user.Password);
-                    _userServiceHandler.AddUser(user);
-                    SendResponse(response, "User created successfully", "application/text", HttpStatusCode.Created);
+                    var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true, MaxDepth = 32 };
+                    var userData = JsonSerializer.Deserialize<User>(requestBody, options);
+                    if (userData != null)
+                    {
+                        username = userData.Username;
+                        password = userData.Password;
+                    }
                 }
-                else
+                catch (JsonException)
                 {
-                    SendErrorResponse(response, HttpStatusCode.Conflict, "User already exists");
+                    SendErrorResponse(response, HttpStatusCode.BadRequest, "Invalid JSON");
+                    return;
                 }
             }
             else
             {
-                SendErrorResponse(response, HttpStatusCode.BadRequest, "Invalid user data");
+                // Parse form data
+                var formData = requestBody.Split('&')
+                    .Select(part => part.Split('='))
+                    .Where(split => split.Length == 2)
+                    .ToDictionary(split => Uri.UnescapeDataString(split[0]), split => Uri.UnescapeDataString(split[1]));
+
+                username = formData.ContainsKey("username") ? formData["username"] : null;
+                password = formData.ContainsKey("password") ? formData["password"] : null;
+            }
+
+            if (string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(password))
+            {
+                SendErrorResponse(response, HttpStatusCode.BadRequest, "Missing username or password");
+                return;
+            }
+
+            // Validierung
+            if (!IsValidInput(username))
+            {
+                SendErrorResponse(response, HttpStatusCode.BadRequest, "Invalid username format");
+                return;
+            }
+
+            if (!IsValidPassword(password))
+            {
+                SendErrorResponse(response, HttpStatusCode.BadRequest, "Invalid password format");
+                return;
+            }
+
+            if (username.Length > MAX_USERNAME_LENGTH || password.Length > MAX_PASSWORD_LENGTH)
+            {
+                SendErrorResponse(response, HttpStatusCode.BadRequest, "Username or password too long");
+                return;
+            }
+
+            var existingUser = _userServiceHandler.GetUserByName(username);
+            if (existingUser != null)
+            {
+                SendErrorResponse(response, HttpStatusCode.Conflict, "User already exists");
+                return;
+            }
+
+            try
+            {
+                // Hash password before saving
+                string hashedPassword = PasswordHasher.HashPassword(password);
+                var newUser = new User(0, username, hashedPassword);
+                newUser.GetNextAvailableId(_userServiceHandler.GetAllUsers());
+
+                _userServiceHandler.AddUser(newUser);
+
+                // Redirect to login page after successful registration
+                response.WriteLine("HTTP/1.1 302 Found");
+                response.WriteLine("Location: /login");
+                response.WriteLine("Content-Length: 0");
+                response.WriteLine("X-Content-Type-Options: nosniff");
+                response.WriteLine("X-Frame-Options: DENY");
+                response.WriteLine("X-XSS-Protection: 1; mode=block");
+                response.WriteLine("Strict-Transport-Security: max-age=31536000; includeSubDomains; preload");
+                response.WriteLine();
+                response.Flush();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error creating user: {ex.Message}");
+                SendErrorResponse(response, HttpStatusCode.InternalServerError, "Error creating user");
             }
         }
 
