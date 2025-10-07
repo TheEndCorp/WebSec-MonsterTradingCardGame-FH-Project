@@ -25,15 +25,9 @@ Users can:
 - battle against another user
 - compare their stats in the score-board.
 - trade cards to have better chances to win (see detail description below).
-
-Further Features:
-- display a scoreboard (= sorted list of ELO values)
-- (FUTURE FEATURE)  editable profile page
-- user stats – especially ELO calculation (+3 points for win, -5 for loss, starting value: 100;
-higher sophisticated ELO system welcome)
-- security check (using the token that is retrieved at login on the server-side, so that user
-actions can only be performed by the corresponding user itself)
-
+- editable profile page
+- security features (e.g., password hashing, token-based authentication)
+- check other users information when logged in
 
 ## Installation
 To clone and run this application, you'll need Visual Studio:
@@ -50,7 +44,6 @@ Projekt ausführen
 1.	Stellen Sie sicher, dass das Projekt erfolgreich geladen wurde und alle Abhängigkeiten installiert sind.
 2.	Wählen Sie im Visual Studio die SemesterProjekt1-Projektmappe aus.
 3.	Klicken Sie auf Start oder drücken Sie F5, um das Projekt auszuführen.
-
 
 # Clone this repository
 git clone https://github.com/MarkoEMW/SemesterProjekt1.git
