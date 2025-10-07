@@ -21,13 +21,16 @@ namespace SemesterProjekt1
             _tradingDeals = _databaseHandler.LoadTrades();
             _admingeneratedcardpacks = new List<CardPack>();
 
+            /*
             if (_users.Count == 0)
             {
                 InitializeDefaultUsers();
                 _databaseHandler.SaveUsers(_users);
             }
+            */
         }
 
+        /*
         private void InitializeDefaultUsers()
         {
             _users = new List<User>
@@ -37,6 +40,7 @@ namespace SemesterProjekt1
                 new User(2, "Jane", PasswordHasher.HashPassword("test")),
             };
         }
+        */
 
         private void SendResponse(HttpListenerResponse response, string content, string contentType)
         {
